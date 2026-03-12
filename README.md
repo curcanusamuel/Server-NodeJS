@@ -14,12 +14,26 @@ Add DB settings to `.env`.
 Preferred (Supabase URI):
 
 ```env
-# Linux machine with IPv6 direct connection
-DATABASE_URL=postgresql://postgres:<PASSWORD>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+# Select connection by mode
+DB_CONNECTION_MODE=direct
 
-# macOS/Windows machine (IPv4-friendly pooler)
-# DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
+# IPv6 direct host
+DATABASE_URL_DIRECT=postgresql://postgres:<PASSWORD>@db.<project-ref>.supabase.co:5432/postgres
+
+# IPv4-friendly pooler
+DATABASE_URL_POOLER=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+
+# Optional TLS verification (default false, works with Supabase cert chain in this setup)
+DB_SSL_REJECT_UNAUTHORIZED=false
 ```
+
+Notes:
+- Your machine (Linux): set `DB_CONNECTION_MODE=direct`.
+- macOS/Windows machines: set `DB_CONNECTION_MODE=pooler`.
+- If password has reserved URL characters (`#`, `@`, `/`, `?`), they must be URL-encoded in raw URIs.  
+  Example: `abc#123` becomes `abc%23123`.
+- Do not append `sslmode` in URL query params; TLS is controlled by `DB_SSL_REJECT_UNAUTHORIZED`.
+- Legacy `SUPABASE_URL` is still accepted.
 
 Fallback (legacy split vars, still supported):
 
