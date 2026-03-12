@@ -6,8 +6,29 @@ Express + TypeScript REST API for patient CRUD.
 
 ```bash
 npm install
-cp .env.example .env
-# fill in your DB credentials in .env
+cp .env.example .env # or create .env manually
+```
+
+Add DB settings to `.env`.
+
+Preferred (Supabase URI):
+
+```env
+# Linux machine with IPv6 direct connection
+DATABASE_URL=postgresql://postgres:<PASSWORD>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+
+# macOS/Windows machine (IPv4-friendly pooler)
+# DATABASE_URL=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+Fallback (legacy split vars, still supported):
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=ids_clinic
+DB_USER=postgres
+DB_PASSWORD=
 ```
 
 ## Database
