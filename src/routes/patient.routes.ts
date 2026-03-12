@@ -19,6 +19,34 @@ patientRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
+// GET /api/patients/navigation/first?q=
+patientRouter.get('/navigation/first', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const query = req.query.q as string | undefined
+    const navigation = await patientRepository.findFirstNavigation(query)
+    res.json(navigation)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/patients/navigation/:id?q=
+patientRouter.get('/navigation/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const query = req.query.q as string | undefined
+    const navigation = await patientRepository.findNavigationById(req.params.id, query)
+    if (!navigation || !navigation.patient) {
+      res.status(404).json({ error: 'Patient not found' })
+      return
+    }
+    res.json(navigation)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/patients/:id
 patientRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {

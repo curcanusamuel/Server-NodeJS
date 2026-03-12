@@ -7,7 +7,7 @@ export const createPatientSchema = z.object({
   cod: z.string().default(''),
   varsta: z.number().int().min(0).max(150),
   sex: z.enum(['Masculin', 'Feminin', 'Altul']),
-  tipActului: z.enum(['B.I', 'C.I', 'Pasaport', 'Sedere']),
+  tipActului: z.enum(['BI', 'CI', 'Pasaport', 'Sedere']),
   codCNP: z.string().length(13, 'CNP trebuie să aibă 13 caractere'),
   buletinSerie: z.string().default(''),
   buletinNr: z.string().default(''),
