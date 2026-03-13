@@ -5,6 +5,20 @@ import { validate } from '../middleware/validate'
 
 export const patientRouter = Router()
 
+async function handleUpdatePatient(req: Request, res: Response): Promise<void> {
+  try {
+    const patient = await patientRepository.update(req.params.id, req.body)
+    if (!patient) {
+      res.status(404).json({ error: 'Patient not found' })
+      return
+    }
+    res.json(patient)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+}
+
 // GET /api/patients — list all, or search with ?q=
 patientRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -87,19 +101,14 @@ patientRouter.post(
 patientRouter.patch(
   '/:id',
   validate(updatePatientSchema),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const patient = await patientRepository.update(req.params.id, req.body)
-      if (!patient) {
-        res.status(404).json({ error: 'Patient not found' })
-        return
-      }
-      res.json(patient)
-    } catch (err) {
-      console.error(err)
-      res.status(500).json({ error: 'Internal server error' })
-    }
-  }
+  handleUpdatePatient
+)
+
+// PUT /api/patients/:id — compatibility alias for full update clients
+patientRouter.put(
+  '/:id',
+  validate(updatePatientSchema),
+  handleUpdatePatient
 )
 
 // DELETE /api/patients/:id
