@@ -1,13 +1,31 @@
 import { Router, Request, Response } from 'express'
 import { patientRepository } from '../repositories/patient.repository'
-import { createPatientSchema, updatePatientSchema } from '../schemas/patient.schema'
+import { createPatientSchema, updatePatientSchema, verificationSchema } from '../schemas/patient.schema'
 import { validate } from '../middleware/validate'
 
 export const patientRouter = Router()
 
 async function handleUpdatePatient(req: Request, res: Response): Promise<void> {
   try {
-    const patient = await patientRepository.update(req.params.id, req.body)
+    const result = await patientRepository.update(req.params.id, req.body)
+    if (result.status === 'not_found') {
+      res.status(404).json({ error: 'Patient not found' })
+      return
+    }
+    if (result.status === 'verified') {
+      res.status(403).json({ error: 'Pacientii validati nu pot fi modificati' })
+      return
+    }
+    res.json(result.patient)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+}
+
+async function handleUpdatePatientVerification(req: Request, res: Response): Promise<void> {
+  try {
+    const patient = await patientRepository.updateVerification(req.params.id, req.body.isVerified)
     if (!patient) {
       res.status(404).json({ error: 'Patient not found' })
       return
@@ -109,6 +127,13 @@ patientRouter.put(
   '/:id',
   validate(updatePatientSchema),
   handleUpdatePatient
+)
+
+// PATCH /api/patients/:id/verification — toggle verification
+patientRouter.patch(
+  '/:id/verification',
+  validate(verificationSchema),
+  handleUpdatePatientVerification
 )
 
 // DELETE /api/patients/:id

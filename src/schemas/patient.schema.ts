@@ -1,5 +1,15 @@
 import { z } from 'zod'
 
+const nullableString = z.string().nullable().optional()
+const nullableEmail = z.preprocess(
+  (value) => (value === '' ? null : value),
+  z.string().email('Email invalid').nullable().optional()
+)
+const nullableDate = z.preprocess(
+  (value) => (value === '' ? null : value),
+  z.union([z.coerce.date(), z.null()]).optional()
+)
+
 export const createPatientSchema = z.object({
   nume: z.string().min(1, 'Numele este obligatoriu'),
   prenume: z.string().min(1, 'Prenumele este obligatoriu'),
@@ -34,9 +44,52 @@ export const createPatientSchema = z.object({
   ultimaModificareFacutaDe: z.string().default(''),
   nrPacientiGasiti: z.number().int().min(0).default(0),
   pnCode: z.string().default(''),
+  telefon: nullableString,
+  mobil: nullableString,
+  email: nullableEmail,
+  domiciliuTara: nullableString,
+  domiciliuJudet: nullableString,
+  domiciliuLocalitate: nullableString,
+  domiciliuAdresa: nullableString,
+  domiciliuNumar: nullableString,
+  domiciliuBloc: nullableString,
+  domiciliuScara: nullableString,
+  domiciliuEtaj: nullableString,
+  domiciliuApartament: nullableString,
+  resedintaTara: nullableString,
+  resedintaJudet: nullableString,
+  resedintaLocalitate: nullableString,
+  resedintaAdresa: nullableString,
+  resedintaNumar: nullableString,
+  resedintaBloc: nullableString,
+  resedintaScara: nullableString,
+  resedintaEtaj: nullableString,
+  resedintaApartament: nullableString,
+  contactNume: nullableString,
+  contactPrenume: nullableString,
+  contactTelefon: nullableString,
+  contactEmail: nullableEmail,
+  contactRelatie: nullableString,
+  medicFamilieNume: nullableString,
+  medicFamilieEmail: nullableEmail,
+  nivelNotificari: nullableString,
+  sursaInformare: nullableString,
+  casStatusAsigurare: nullableString,
+  casDenumire: nullableString,
+  casTipAsigurare: nullableString,
+  casNrCardEuropean: nullableString,
+  casCardValabilPana: nullableDate,
+  casEminent: nullableString,
+  casCodEminent: nullableString,
+  casCategorieAsigurat: nullableString,
+  isVerified: z.never().optional(),
 })
 
 export const updatePatientSchema = createPatientSchema.partial()
+export const verificationSchema = z.object({
+  isVerified: z.boolean(),
+}).strict()
 
 export type CreatePatientInput = z.infer<typeof createPatientSchema>
 export type UpdatePatientInput = z.infer<typeof updatePatientSchema>
+export type VerificationInput = z.infer<typeof verificationSchema>
