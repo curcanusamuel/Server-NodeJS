@@ -8,7 +8,8 @@ import { db } from './db/pool'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = Number(process.env.PORT) || 3000
+const HOST = process.env.HOST || '0.0.0.0'
 
 // ── Middleware ──────────────────────────────────────────────
 app.use(helmet())
@@ -41,8 +42,11 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 })
 
 // ── Start ────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
+const server = app.listen(PORT, HOST, () => {
+  const addr = server.address()
+  let displayHost = HOST
+  if (displayHost === '0.0.0.0') displayHost = 'your-machine-ip-or-localhost'
+  console.log(`Server running on http://${displayHost}:${PORT}`)
 })
 
 export default app
