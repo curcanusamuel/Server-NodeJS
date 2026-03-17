@@ -208,7 +208,7 @@ export const patientRepository = {
 
   async create(data: CreatePatientInput): Promise<Patient> {
     const result = await db.query(
-      `INSERT INTO patients (
+      `INSERT INTO public.patients (
         nume, prenume, nr, cod, varsta, sex, tip_actului, cod_cnp,
         buletin_serie, buletin_nr, eliberat_de, valabil_pana, data_nasterii,
         cetatenie, cetatenie2, ocupatie, educatie, loc_munca,
@@ -370,7 +370,7 @@ export const patientRepository = {
 
     values.push(id)
     const result = await db.query(
-      `UPDATE patients
+      `UPDATE public.patients
        SET ${fields.join(', ')}
        WHERE id = $${i} AND is_verified = false
        RETURNING *`,
@@ -395,7 +395,7 @@ export const patientRepository = {
 
   async updateVerification(id: string, isVerified: boolean): Promise<Patient | null> {
     const result = await db.query(
-      'UPDATE patients SET is_verified = $1 WHERE id = $2 RETURNING *',
+      'UPDATE public.patients SET is_verified = $1 WHERE id = $2 RETURNING *',
       [isVerified, id]
     )
     return result.rows[0] ? rowToPatient(result.rows[0]) : null
