@@ -5,6 +5,13 @@ const nullableEmail = z.preprocess(
   (value) => (value === '' ? null : value),
   z.string().email('Email invalid').nullable().optional()
 )
+const nullableEmailOrContactRefusal = z.preprocess(
+  (value) => (value === '' ? null : value),
+  z.union([
+    z.string().email('Email invalid'),
+    z.literal('Refuză persoana de contact'),
+  ]).nullable().optional()
+)
 const nullableDate = z.preprocess(
   (value) => (value === '' ? null : value),
   z.union([z.coerce.date(), z.null()]).optional()
@@ -39,7 +46,7 @@ export const createPatientSchema = z.object({
   localizareDesc: z.string().default(''),
   observatii: z.string().default(''),
   dataInregistrare: z.coerce.date().optional(),
-  cauzeDeces: z.string().optional(),
+  cauzeDeces: z.string().nullable().optional(),
   autorFisa: z.string().default(''),
   ultimaModificareFacutaDe: z.string().default(''),
   nrPacientiGasiti: z.number().int().min(0).default(0),
@@ -68,7 +75,7 @@ export const createPatientSchema = z.object({
   contactNume: nullableString,
   contactPrenume: nullableString,
   contactTelefon: nullableString,
-  contactEmail: nullableEmail,
+  contactEmail: nullableEmailOrContactRefusal,
   contactRelatie: nullableString,
   medicFamilieNume: nullableString,
   medicFamilieEmail: nullableEmail,

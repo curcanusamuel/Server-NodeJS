@@ -28,7 +28,7 @@ export interface Patient {
   localizareDesc: string
   observatii: string
   dataInregistrare?: Date
-  cauzeDeces?: string
+  cauzeDeces?: string | null
   autorFisa: string
   dataIntroducerii: Date
   dataUltimeiModificari: Date
