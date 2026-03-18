@@ -109,3 +109,22 @@ curl -X PATCH http://localhost:3000/api/patients/<uuid> \
   -H "Content-Type: application/json" \
   -d '{ "varsta": 46, "observatii": "Control anual" }'
 ```
+
+
+**Server Deployment Pipeline**
+
+# Deployment steps (manual)
+
+git pull
+
+npm install
+
+npm run build
+
+sudo systemctl restart idsclinic.service
+
+# Check status
+sudo systemctl status idsclinic.service
+
+# Optional: check logs
+journalctl -u idsclinic.service -n 50 --no-pager
