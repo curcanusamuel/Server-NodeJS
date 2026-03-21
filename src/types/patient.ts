@@ -3,7 +3,7 @@ export interface Patient {
   nume: string
   prenume: string
   nr: string
-  cod: string
+  nid: string
   varsta: number
   sex: string
   tipActului: string
@@ -34,7 +34,6 @@ export interface Patient {
   dataUltimeiModificari: Date
   ultimaModificareFacutaDe: string
   nrPacientiGasiti: number
-  pnCode: string
   telefon: string | null
   mobil: string | null
   email: string | null

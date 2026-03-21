@@ -17,24 +17,23 @@ export type PatientUpdateResult =
 export type SortCursor =
   | { sortKey: 'name'; nume: string; prenume: string; id: string }
   | { sortKey: 'age'; varsta: number; id: string }
-  | { sortKey: 'nid'; cod: string; pnCode: string; id: string }
-  | { sortKey: 'locality'; domiciliuLocalitate: string | null; id: string }
-  | { sortKey: 'emailMobile'; email: string | null; id: string }
+  | { sortKey: 'nid'; nid: string; id: string }
+  | { sortKey: 'locality'; domiciliuLocalitate: string; id: string }
+  | { sortKey: 'emailMobile'; email: string; id: string }
   | { sortKey: 'medicCurant'; medicCurant: string; id: string }
-  | { sortKey: 'medicFamilie'; medicFamilieNume: string | null; id: string }
+  | { sortKey: 'medicFamilie'; medicFamilieNume: string; id: string }
   | { sortKey: 'status'; isVerified: boolean; id: string }
-  | { sortKey: 'createdFrom'; sursaInformare: string | null; id: string }
+  | { sortKey: 'createdFrom'; sursaInformare: string; id: string }
   | { sortKey: 'default'; dataIntroducerii: string; id: string }
 
 export interface PatientListParams {
   q?: string
   cnp?: string
-  nidCluj?: string
+  nid?: string
   localitate?: string
   email?: string
   medicCurant?: string
   medicFamilie?: string
-  nidPiatra?: string
   dateStart?: string
   dateEnd?: string
   createdFromAppointmentOnly?: boolean
@@ -64,8 +63,7 @@ const LIST_SELECT_COLUMNS = `
   prenume,
   cod_cnp,
   varsta,
-  cod,
-  pn_code,
+  nid,
   nr_pacienti_gasiti,
   domiciliu_localitate,
   email,
@@ -93,7 +91,7 @@ function buildSearchFilter(query?: string, startIndex = 1): { whereClause: strin
 
   const placeholder = `$${startIndex}`
   return {
-    whereClause: `WHERE nume ILIKE ${placeholder} OR prenume ILIKE ${placeholder} OR cod_cnp ILIKE ${placeholder} OR cod ILIKE ${placeholder}`,
+    whereClause: `WHERE nume ILIKE ${placeholder} OR prenume ILIKE ${placeholder} OR cod_cnp ILIKE ${placeholder} OR nid ILIKE ${placeholder}`,
     values: [`%${trimmed}%`],
   }
 }
@@ -150,8 +148,8 @@ if (tokens.length === 1) {
   const cnpPattern = toContainsPattern(params.cnp)
   if (cnpPattern) pushCondition('cod_cnp ILIKE __PARAM__', cnpPattern)
 
-  const nidClujPattern = toContainsPattern(params.nidCluj)
-  if (nidClujPattern) pushCondition('cod ILIKE __PARAM__', nidClujPattern)
+  const nidPattern = toContainsPattern(params.nid)
+  if (nidPattern) pushCondition('nid ILIKE __PARAM__', nidPattern)
 
   const localityPattern = toContainsPattern(params.localitate)
   if (localityPattern) {
@@ -168,9 +166,6 @@ if (tokens.length === 1) {
 
   const medicFamiliePattern = toContainsPattern(params.medicFamilie)
   if (medicFamiliePattern) pushCondition('medic_familie_nume ILIKE __PARAM__', medicFamiliePattern)
-
-  const nidPiatraPattern = toContainsPattern(params.nidPiatra)
-  if (nidPiatraPattern) pushCondition('pn_code ILIKE __PARAM__', nidPiatraPattern)
 
   if (params.dateStart) pushCondition('data_introducerii >= __PARAM__::date', params.dateStart)
   if (params.dateEnd) pushCondition("data_introducerii < (__PARAM__::date + INTERVAL '1 day')", params.dateEnd)
@@ -194,19 +189,19 @@ function buildOrderBy(sortKey?: PatientListParams['sortKey'], sortDirection: Pat
     case 'age':
       return `ORDER BY varsta ${direction}, nume ASC, prenume ASC, id ASC`
     case 'nid':
-      return `ORDER BY cod ${direction}, pn_code ${direction}, nume ASC, prenume ASC, id ASC`
+      return `ORDER BY nid ${direction}, nume ASC, prenume ASC, id ASC`
     case 'locality':
-      return `ORDER BY domiciliu_localitate ${direction} NULLS LAST, resedinta_localitate ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+      return `ORDER BY domiciliu_localitate ${direction}, resedinta_localitate ${direction}, nume ASC, prenume ASC, id ASC`
     case 'emailMobile':
-      return `ORDER BY email ${direction} NULLS LAST, mobil ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+      return `ORDER BY email ${direction}, mobil ${direction}, nume ASC, prenume ASC, id ASC`
     case 'medicCurant':
       return `ORDER BY medic_curant ${direction}, medic_initial ${direction}, nume ASC, prenume ASC, id ASC`
     case 'medicFamilie':
-      return `ORDER BY medic_familie_nume ${direction} NULLS LAST, medic_familie_email ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+      return `ORDER BY medic_familie_nume ${direction}, medic_familie_email ${direction}, nume ASC, prenume ASC, id ASC`
     case 'status':
       return `ORDER BY is_verified ${direction}, nume ASC, prenume ASC, id ASC`
     case 'createdFrom':
-      return `ORDER BY sursa_informare ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+      return `ORDER BY sursa_informare ${direction}, nume ASC, prenume ASC, id ASC`
     default:
       return ORDER_BY
   }
@@ -219,7 +214,7 @@ function rowToPatient(row: Record<string, unknown>): Patient {
     nume: row.nume as string,
     prenume: row.prenume as string,
     nr: row.nr as string,
-    cod: row.cod as string,
+    nid: row.nid as string,
     varsta: row.varsta as number,
     sex: row.sex as string,
     tipActului: row.tip_actului as string,
@@ -250,7 +245,6 @@ function rowToPatient(row: Record<string, unknown>): Patient {
     dataUltimeiModificari: row.data_ultimei_modificari as Date,
     ultimaModificareFacutaDe: row.ultima_modificare_facuta_de as string,
     nrPacientiGasiti: row.nr_pacienti_gasiti as number,
-    pnCode: row.pn_code as string,
     telefon: (row.telefon as string | null) ?? null,
     mobil: (row.mobil as string | null) ?? null,
     email: (row.email as string | null) ?? null,
@@ -309,7 +303,9 @@ export const patientRepository = {
   },
 
 async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
+  const t0 = Date.now()
   const { whereClause, values } = buildPatientListWhere(params)
+  const t1 = Date.now()
   const sortKey = params.sortKey
   const direction = params.sortDirection === 'desc' ? 'DESC' : 'ASC'
   const orderBy = buildOrderBy(sortKey, params.sortDirection)
@@ -317,17 +313,21 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
   const allValues = [...values]
   let cursorClause = ''
 
+  const t2 = Date.now()
+
   if (params.cursor) {
     const c = params.cursor
     const op = direction === 'ASC' ? '>' : '<'
     const opNulls = direction === 'ASC' ? 'IS NOT NULL' : 'IS NULL'
 
     const addCursor = (clause: string, ...cursorValues: unknown[]) => {
-      // Replace __P1__, __P2__ etc with sequential parameter indices
+      // Replace __P1__, __P2__ etc with sequential parameter indices.
+      // Use replaceAll so placeholders that appear more than once (e.g. __P1__
+      // used twice in an OR condition) all map to the same $N.
       let result = clause
       cursorValues.forEach((val, i) => {
         const idx = allValues.length + 1
-        result = result.replace(`__P${i + 1}__`, `$${idx}`)
+        result = result.split(`__P${i + 1}__`).join(`$${idx}`)
         allValues.push(val)
       })
       cursorClause = result
@@ -358,39 +358,23 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
 
       case 'nid':
         addCursor(
-          `AND (cod, pn_code, id) ${op} (__P1__, __P2__, __P3__::uuid)`,
-          c.cod, c.pnCode, c.id
+          `AND (nid, id) ${op} (__P1__, __P2__::uuid)`,
+          c.nid, c.id
         )
         break
 
       case 'locality':
-        if (c.domiciliuLocalitate === null) {
-          // nulls are last for ASC, first for DESC
-          // when cursor value is null, next page also has nulls or nothing
-          cursorClause = direction === 'ASC'
-            ? `AND domiciliu_localitate IS NULL AND id ${op} $${allValues.length + 1}::uuid`
-            : `AND (domiciliu_localitate IS NOT NULL OR (domiciliu_localitate IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
-          allValues.push(c.id)
-        } else {
-          addCursor(
-            `AND (domiciliu_localitate ${op} __P1__ OR (domiciliu_localitate = __P1__ AND id ${op} __P2__::uuid))`,
-            c.domiciliuLocalitate, c.id
-          )
-        }
+        addCursor(
+          `AND (domiciliu_localitate ${op} __P1__ OR (domiciliu_localitate = __P1__ AND id ${op} __P2__::uuid))`,
+          c.domiciliuLocalitate, c.id
+        )
         break
 
       case 'emailMobile':
-        if (c.email === null) {
-          cursorClause = direction === 'ASC'
-            ? `AND email IS NULL AND id ${op} $${allValues.length + 1}::uuid`
-            : `AND (email IS NOT NULL OR (email IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
-          allValues.push(c.id)
-        } else {
-          addCursor(
-            `AND (email ${op} __P1__ OR (email = __P1__ AND id ${op} __P2__::uuid))`,
-            c.email, c.id
-          )
-        }
+        addCursor(
+          `AND (email ${op} __P1__ OR (email = __P1__ AND id ${op} __P2__::uuid))`,
+          c.email, c.id
+        )
         break
 
       case 'medicCurant':
@@ -401,17 +385,10 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
         break
 
       case 'medicFamilie':
-        if (c.medicFamilieNume === null) {
-          cursorClause = direction === 'ASC'
-            ? `AND medic_familie_nume IS NULL AND id ${op} $${allValues.length + 1}::uuid`
-            : `AND (medic_familie_nume IS NOT NULL OR (medic_familie_nume IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
-          allValues.push(c.id)
-        } else {
-          addCursor(
-            `AND (medic_familie_nume ${op} __P1__ OR (medic_familie_nume = __P1__ AND id ${op} __P2__::uuid))`,
-            c.medicFamilieNume, c.id
-          )
-        }
+        addCursor(
+          `AND (medic_familie_nume ${op} __P1__ OR (medic_familie_nume = __P1__ AND id ${op} __P2__::uuid))`,
+          c.medicFamilieNume, c.id
+        )
         break
 
       case 'status':
@@ -423,17 +400,10 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
         break
 
       case 'createdFrom':
-        if (c.sursaInformare === null) {
-          cursorClause = direction === 'ASC'
-            ? `AND sursa_informare IS NULL AND id ${op} $${allValues.length + 1}::uuid`
-            : `AND (sursa_informare IS NOT NULL OR (sursa_informare IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
-          allValues.push(c.id)
-        } else {
-          addCursor(
-            `AND (sursa_informare ${op} __P1__ OR (sursa_informare = __P1__ AND id ${op} __P2__::uuid))`,
-            c.sursaInformare, c.id
-          )
-        }
+        addCursor(
+          `AND (sursa_informare ${op} __P1__ OR (sursa_informare = __P1__ AND id ${op} __P2__::uuid))`,
+          c.sursaInformare, c.id
+        )
         break
     }
   }
@@ -452,6 +422,7 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
   allValues.push(limit + 1)
 
   const result = await db.query(sql, allValues)
+   const t3 = Date.now()
   const rows = result.rows.slice(0, limit)
   const hasMore = result.rows.length > limit
   const lastRow = rows[rows.length - 1]
@@ -468,31 +439,39 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
         nextCursor = { sortKey: 'age', varsta: lastRow.varsta, id: lastRow.id }
         break
       case 'nid':
-        nextCursor = { sortKey: 'nid', cod: lastRow.cod, pnCode: lastRow.pn_code, id: lastRow.id }
+        nextCursor = { sortKey: 'nid', nid: lastRow.nid, id: lastRow.id }
         break
       case 'locality':
-        nextCursor = { sortKey: 'locality', domiciliuLocalitate: lastRow.domiciliu_localitate ?? null, id: lastRow.id }
+        nextCursor = { sortKey: 'locality', domiciliuLocalitate: lastRow.domiciliu_localitate as string, id: lastRow.id }
         break
       case 'emailMobile':
-        nextCursor = { sortKey: 'emailMobile', email: lastRow.email ?? null, id: lastRow.id }
+        nextCursor = { sortKey: 'emailMobile', email: lastRow.email as string, id: lastRow.id }
         break
       case 'medicCurant':
         nextCursor = { sortKey: 'medicCurant', medicCurant: lastRow.medic_curant, id: lastRow.id }
         break
       case 'medicFamilie':
-        nextCursor = { sortKey: 'medicFamilie', medicFamilieNume: lastRow.medic_familie_nume ?? null, id: lastRow.id }
+        nextCursor = { sortKey: 'medicFamilie', medicFamilieNume: lastRow.medic_familie_nume as string, id: lastRow.id }
         break
       case 'status':
         nextCursor = { sortKey: 'status', isVerified: Boolean(lastRow.is_verified), id: lastRow.id }
         break
       case 'createdFrom':
-        nextCursor = { sortKey: 'createdFrom', sursaInformare: lastRow.sursa_informare ?? null, id: lastRow.id }
+        nextCursor = { sortKey: 'createdFrom', sursaInformare: lastRow.sursa_informare as string, id: lastRow.id }
         break
       default:
         nextCursor = { sortKey: 'default', dataIntroducerii: lastRow.data_introducerii, id: lastRow.id }
         break
     }
   }
+  const t4 = Date.now()
+    console.log('[patients] list timing', {
+    buildWhere: t1 - t0,
+    buildCursor: t2 - t1,
+    dbQuery: t3 - t2,
+    buildResult: t4 - t3,
+    total: t4 - t0,
+  })
 
   return {
     items: rows.map(rowToPatient),
@@ -616,14 +595,14 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
   async create(data: CreatePatientInput): Promise<Patient> {
     const result = await db.query(
       `INSERT INTO public.patients (
-        nume, prenume, nr, cod, varsta, sex, tip_actului, cod_cnp,
+        nume, prenume, nr, nid, varsta, sex, tip_actului, cod_cnp,
         buletin_serie, buletin_nr, eliberat_de, valabil_pana, data_nasterii,
         cetatenie, cetatenie2, ocupatie, educatie, loc_munca,
         medic_initial, medic_curant,
         data_prezentare, varsta_prezentare, pacient_oncologic,
         localizare_icd, localizare_desc, observatii,
         data_inregistrare, cauze_deces, autor_fisa,
-        ultima_modificare_facuta_de, nr_pacienti_gasiti, pn_code,
+        ultima_modificare_facuta_de, nr_pacienti_gasiti,
         telefon, mobil, email,
         domiciliu_tara, domiciliu_judet, domiciliu_localitate, domiciliu_adresa, domiciliu_numar, domiciliu_bloc, domiciliu_scara, domiciliu_etaj, domiciliu_apartament,
         resedinta_tara, resedinta_judet, resedinta_localitate, resedinta_adresa, resedinta_numar, resedinta_bloc, resedinta_scara, resedinta_etaj, resedinta_apartament,
@@ -639,20 +618,20 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
         $21,$22,$23,
         $24,$25,$26,
         $27,$28,$29,
-        $30,$31,$32,
-        $33,$34,$35,
-        $36,$37,$38,$39,$40,$41,$42,$43,$44,
-        $45,$46,$47,$48,$49,$50,$51,$52,$53,
-        $54,$55,$56,$57,$58,
-        $59,$60,
-        $61,$62,
-        $63,$64,$65,$66,$67,$68,$69,$70
+        $30,$31,
+        $32,$33,$34,
+        $35,$36,$37,$38,$39,$40,$41,$42,$43,
+        $44,$45,$46,$47,$48,$49,$50,$51,$52,
+        $53,$54,$55,$56,$57,
+        $58,$59,
+        $60,$61,
+        $62,$63,$64,$65,$66,$67,$68,$69
       ) RETURNING *`,
       [
         data.nume,
         data.prenume,
         data.nr,
-        data.cod,
+        data.nid,
         data.varsta,
         data.sex,
         data.tipActului,
@@ -681,13 +660,12 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
         data.autorFisa,
         data.ultimaModificareFacutaDe,
         data.nrPacientiGasiti,
-        data.pnCode,
         data.telefon ?? null,
-        data.mobil ?? null,
-        data.email ?? null,
+        data.mobil ?? '',
+        data.email ?? '',
         data.domiciliuTara ?? null,
         data.domiciliuJudet ?? null,
-        data.domiciliuLocalitate ?? null,
+        data.domiciliuLocalitate ?? '',
         data.domiciliuAdresa ?? null,
         data.domiciliuNumar ?? null,
         data.domiciliuBloc ?? null,
@@ -708,10 +686,10 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
         data.contactTelefon ?? null,
         data.contactEmail ?? null,
         data.contactRelatie ?? null,
-        data.medicFamilieNume ?? null,
-        data.medicFamilieEmail ?? null,
+        data.medicFamilieNume ?? '',
+        data.medicFamilieEmail ?? '',
         data.nivelNotificari ?? null,
-        data.sursaInformare ?? null,
+        data.sursaInformare ?? '',
         data.casStatusAsigurare ?? null,
         data.casDenumire ?? null,
         data.casTipAsigurare ?? null,
@@ -731,7 +709,7 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
     let i = 1
 
     const fieldMap: Record<string, string> = {
-      nume: 'nume', prenume: 'prenume', nr: 'nr', cod: 'cod',
+      nume: 'nume', prenume: 'prenume', nr: 'nr', nid: 'nid',
       varsta: 'varsta', sex: 'sex', tipActului: 'tip_actului', codCNP: 'cod_cnp',
       buletinSerie: 'buletin_serie', buletinNr: 'buletin_nr', eliberatDe: 'eliberat_de',
       valabilPana: 'valabil_pana', dataNasterii: 'data_nasterii',
@@ -744,7 +722,7 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
       localizareDesc: 'localizare_desc', observatii: 'observatii',
       dataInregistrare: 'data_inregistrare', cauzeDeces: 'cauze_deces',
       autorFisa: 'autor_fisa', ultimaModificareFacutaDe: 'ultima_modificare_facuta_de',
-      nrPacientiGasiti: 'nr_pacienti_gasiti', pnCode: 'pn_code',
+      nrPacientiGasiti: 'nr_pacienti_gasiti',
       telefon: 'telefon', mobil: 'mobil', email: 'email',
       domiciliuTara: 'domiciliu_tara', domiciliuJudet: 'domiciliu_judet', domiciliuLocalitate: 'domiciliu_localitate',
       domiciliuAdresa: 'domiciliu_adresa', domiciliuNumar: 'domiciliu_numar', domiciliuBloc: 'domiciliu_bloc',

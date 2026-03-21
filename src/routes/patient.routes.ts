@@ -64,23 +64,23 @@ function parseCursorFromQuery(query: Record<string, unknown>): SortCursor | unde
         return { sortKey: 'age', varsta: Number(query.cursorVarsta), id }
       break
     case 'nid':
-      if (query.cursorCod !== undefined)
-        return { sortKey: 'nid', cod: String(query.cursorCod), pnCode: String(query.cursorPnCode ?? ''), id }
+      if (query.cursorNid !== undefined)
+        return { sortKey: 'nid', nid: String(query.cursorNid), id }
       break
     case 'locality':
-      return { sortKey: 'locality', domiciliuLocalitate: query.cursorLocalitate ? String(query.cursorLocalitate) : null, id }
+      return { sortKey: 'locality', domiciliuLocalitate: String(query.cursorLocalitate ?? ''), id }
     case 'emailMobile':
-      return { sortKey: 'emailMobile', email: query.cursorEmail ? String(query.cursorEmail) : null, id }
+      return { sortKey: 'emailMobile', email: String(query.cursorEmail ?? ''), id }
     case 'medicCurant':
       if (query.cursorMedicCurant)
         return { sortKey: 'medicCurant', medicCurant: String(query.cursorMedicCurant), id }
       break
     case 'medicFamilie':
-      return { sortKey: 'medicFamilie', medicFamilieNume: query.cursorMedicFamilie ? String(query.cursorMedicFamilie) : null, id }
+      return { sortKey: 'medicFamilie', medicFamilieNume: String(query.cursorMedicFamilie ?? ''), id }
     case 'status':
       return { sortKey: 'status', isVerified: query.cursorIsVerified === 'true', id }
     case 'createdFrom':
-      return { sortKey: 'createdFrom', sursaInformare: query.cursorSursaInformare ? String(query.cursorSursaInformare) : null, id }
+      return { sortKey: 'createdFrom', sursaInformare: String(query.cursorSursaInformare ?? ''), id }
     case 'default':
       if (query.cursorDate)
         return { sortKey: 'default', dataIntroducerii: String(query.cursorDate), id }
@@ -109,10 +109,12 @@ patientRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       query,
     })
 
+    const t0 = Date.now()
     const paginatedPatients = await patientRepository.list({
       ...query,
       cursor: parseCursorFromQuery(req.query),
     })
+    console.log('[patients] repository call took', Date.now() - t0, 'ms')
 
     console.log('[patients] GET /api/patients response', {
       durationMs: Date.now() - requestStartTime,
