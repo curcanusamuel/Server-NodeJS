@@ -1,6 +1,46 @@
 import { z } from 'zod'
 
 const nullableString = z.string().nullable().optional()
+const optionalQueryString = z.preprocess(
+  (value) => {
+    const normalized = Array.isArray(value) ? value[0] : value
+    if (typeof normalized !== 'string') return undefined
+    const trimmed = normalized.trim()
+    return trimmed === '' ? undefined : trimmed
+  },
+  z.string().optional()
+)
+const optionalQueryInt = z.preprocess(
+  (value) => {
+    const normalized = Array.isArray(value) ? value[0] : value
+    if (normalized === undefined || normalized === null || normalized === '') return undefined
+    return Number(normalized)
+  },
+  z.number().int().nonnegative().optional()
+)
+const optionalQueryBoolean = z.preprocess(
+  (value) => {
+    const normalized = Array.isArray(value) ? value[0] : value
+    if (normalized === undefined || normalized === null || normalized === '') return undefined
+    if (typeof normalized === 'boolean') return normalized
+    if (typeof normalized === 'string') {
+      const lower = normalized.toLowerCase()
+      if (lower === 'true') return true
+      if (lower === 'false') return false
+    }
+    return normalized
+  },
+  z.boolean().optional()
+)
+const optionalQueryDateString = z.preprocess(
+  (value) => {
+    const normalized = Array.isArray(value) ? value[0] : value
+    if (typeof normalized !== 'string') return undefined
+    const trimmed = normalized.trim()
+    return trimmed === '' ? undefined : trimmed
+  },
+  z.string().date().optional()
+)
 const nullableEmail = z.preprocess(
   (value) => (value === '' ? null : value),
   z.string().email('Email invalid').nullable().optional()
@@ -97,6 +137,45 @@ export const verificationSchema = z.object({
   isVerified: z.boolean(),
 }).strict()
 
+export const patientListQuerySchema = z.object({
+  q: optionalQueryString,
+  cnp: optionalQueryString,
+  nidCluj: optionalQueryString,
+  localitate: optionalQueryString,
+  email: optionalQueryString,
+  medicCurant: optionalQueryString,
+  medicFamilie: optionalQueryString,
+  nidPiatra: optionalQueryString,
+  dateStart: optionalQueryDateString,
+  dateEnd: optionalQueryDateString,
+  createdFromAppointmentOnly: optionalQueryBoolean,
+  sortKey: z.preprocess(
+    (value) => Array.isArray(value) ? value[0] : value,
+    z.enum(['name', 'age', 'nid', 'locality', 'emailMobile', 'medicCurant', 'medicFamilie', 'status', 'createdFrom']).optional()
+  ),
+  sortDirection: z.preprocess(
+    (value) => Array.isArray(value) ? value[0] : value,
+    z.enum(['asc', 'desc']).optional()
+  ),
+  includeTotal: optionalQueryBoolean,
+  limit: optionalQueryInt,
+  cursorSortKey: optionalQueryString,
+  cursorId: optionalQueryString,
+  cursorNume: optionalQueryString,
+  cursorPrenume: optionalQueryString,
+  cursorVarsta: optionalQueryString,
+  cursorCod: optionalQueryString,
+  cursorPnCode: optionalQueryString,
+  cursorLocalitate: optionalQueryString,
+  cursorEmail: optionalQueryString,
+  cursorMedicCurant: optionalQueryString,
+  cursorMedicFamilie: optionalQueryString,
+  cursorIsVerified: optionalQueryString,
+  cursorSursaInformare: optionalQueryString,
+  cursorDate: optionalQueryString,
+}).strict()
+
 export type CreatePatientInput = z.infer<typeof createPatientSchema>
 export type UpdatePatientInput = z.infer<typeof updatePatientSchema>
 export type VerificationInput = z.infer<typeof verificationSchema>
+export type PatientListQueryInput = z.infer<typeof patientListQuerySchema>

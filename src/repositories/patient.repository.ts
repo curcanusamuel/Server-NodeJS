@@ -14,7 +14,76 @@ export type PatientUpdateResult =
   | { status: 'not_found' }
   | { status: 'verified' }
 
+export type SortCursor =
+  | { sortKey: 'name'; nume: string; prenume: string; id: string }
+  | { sortKey: 'age'; varsta: number; id: string }
+  | { sortKey: 'nid'; cod: string; pnCode: string; id: string }
+  | { sortKey: 'locality'; domiciliuLocalitate: string | null; id: string }
+  | { sortKey: 'emailMobile'; email: string | null; id: string }
+  | { sortKey: 'medicCurant'; medicCurant: string; id: string }
+  | { sortKey: 'medicFamilie'; medicFamilieNume: string | null; id: string }
+  | { sortKey: 'status'; isVerified: boolean; id: string }
+  | { sortKey: 'createdFrom'; sursaInformare: string | null; id: string }
+  | { sortKey: 'default'; dataIntroducerii: string; id: string }
+
+export interface PatientListParams {
+  q?: string
+  cnp?: string
+  nidCluj?: string
+  localitate?: string
+  email?: string
+  medicCurant?: string
+  medicFamilie?: string
+  nidPiatra?: string
+  dateStart?: string
+  dateEnd?: string
+  createdFromAppointmentOnly?: boolean
+  sortKey?: 'name' | 'age' | 'nid' | 'locality' | 'emailMobile' | 'medicCurant' | 'medicFamilie' | 'status' | 'createdFrom'
+  sortDirection?: 'asc' | 'desc'
+  includeTotal?: boolean
+  cursor?: SortCursor
+  limit?: number
+}
+
+export interface PaginatedPatientsResult {
+  items: Patient[]
+  total: number | null
+  limit: number
+  hasMore: boolean
+  nextCursor: SortCursor | null
+}
+
+export interface PatientsCountResult {
+  total: number
+}
+
 const ORDER_BY = 'ORDER BY data_introducerii ASC, id ASC'
+const LIST_SELECT_COLUMNS = `
+  id,
+  nume,
+  prenume,
+  cod_cnp,
+  varsta,
+  cod,
+  pn_code,
+  nr_pacienti_gasiti,
+  domiciliu_localitate,
+  email,
+  mobil,
+  medic_curant,
+  medic_initial,
+  medic_familie_nume,
+  medic_familie_email,
+  is_verified,
+  sursa_informare
+`
+
+function logPatientsQuery(label: string, startTime: number, details: Record<string, unknown>): void {
+  console.log(
+    `[patients] ${label} completed in ${Date.now() - startTime}ms`,
+    details
+  )
+}
 
 function buildSearchFilter(query?: string, startIndex = 1): { whereClause: string; values: unknown[] } {
   const trimmed = query?.trim()
@@ -26,6 +95,120 @@ function buildSearchFilter(query?: string, startIndex = 1): { whereClause: strin
   return {
     whereClause: `WHERE nume ILIKE ${placeholder} OR prenume ILIKE ${placeholder} OR cod_cnp ILIKE ${placeholder} OR cod ILIKE ${placeholder}`,
     values: [`%${trimmed}%`],
+  }
+}
+
+function toContainsPattern(value?: string): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? `%${trimmed}%` : null
+}
+
+function toPrefixPattern(value?: string): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? `${trimmed}%` : null
+}
+
+function buildPatientListWhere(params: PatientListParams, startIndex = 1): { whereClause: string; values: unknown[] } {
+  const conditions: string[] = []
+  const values: unknown[] = []
+  let parameterIndex = startIndex
+
+  const pushCondition = (sql: string, value: unknown): void => {
+    conditions.push(sql.split('__PARAM__').join(`$${parameterIndex}`))
+    values.push(value)
+    parameterIndex += 1
+  }
+
+  const trimmedNameQuery = params.q?.trim()
+  if (trimmedNameQuery) {
+    const tokens = trimmedNameQuery.split(/\s+/).filter(Boolean)
+
+   
+if (tokens.length === 1) {
+  const qPattern = toPrefixPattern(tokens[0])
+  if (qPattern) {
+    const p1 = `$${parameterIndex}`
+    const p2 = `$${parameterIndex + 1}`
+    values.push(qPattern, qPattern)
+    parameterIndex += 2
+    conditions.push(`(nume ILIKE ${p1} OR prenume ILIKE ${p2})`)
+  }
+} else {
+  const fullPattern = `%${tokens.join(' ')}%`
+  const reversePattern = `%${[...tokens].reverse().join(' ')}%`
+  const p1 = `$${parameterIndex}`
+  const p2 = `$${parameterIndex + 1}`
+  values.push(fullPattern, reversePattern)
+  parameterIndex += 2
+  conditions.push(
+    `((coalesce(nume,'') || ' ' || coalesce(prenume,'')) ILIKE ${p1}
+     OR (coalesce(prenume,'') || ' ' || coalesce(nume,'')) ILIKE ${p2})`
+  )
+}
+  }
+
+  const cnpPattern = toContainsPattern(params.cnp)
+  if (cnpPattern) pushCondition('cod_cnp ILIKE __PARAM__', cnpPattern)
+
+  const nidClujPattern = toContainsPattern(params.nidCluj)
+  if (nidClujPattern) pushCondition('cod ILIKE __PARAM__', nidClujPattern)
+
+  const localityPattern = toContainsPattern(params.localitate)
+  if (localityPattern) {
+    pushCondition('(domiciliu_localitate ILIKE __PARAM__ OR resedinta_localitate ILIKE __PARAM__)', localityPattern)
+  }
+
+  const emailPattern = toContainsPattern(params.email)
+  if (emailPattern) pushCondition('email ILIKE __PARAM__', emailPattern)
+
+  const medicCurantPattern = toContainsPattern(params.medicCurant)
+  if (medicCurantPattern) {
+    pushCondition('(medic_curant ILIKE __PARAM__ OR medic_initial ILIKE __PARAM__)', medicCurantPattern)
+  }
+
+  const medicFamiliePattern = toContainsPattern(params.medicFamilie)
+  if (medicFamiliePattern) pushCondition('medic_familie_nume ILIKE __PARAM__', medicFamiliePattern)
+
+  const nidPiatraPattern = toContainsPattern(params.nidPiatra)
+  if (nidPiatraPattern) pushCondition('pn_code ILIKE __PARAM__', nidPiatraPattern)
+
+  if (params.dateStart) pushCondition('data_introducerii >= __PARAM__::date', params.dateStart)
+  if (params.dateEnd) pushCondition("data_introducerii < (__PARAM__::date + INTERVAL '1 day')", params.dateEnd)
+
+  if (params.createdFromAppointmentOnly) {
+    conditions.push("(lower(coalesce(sursa_informare, '')) LIKE '%program%' OR lower(coalesce(sursa_informare, '')) LIKE '%appoint%')")
+  }
+
+  return {
+    whereClause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
+    values,
+  }
+}
+
+function buildOrderBy(sortKey?: PatientListParams['sortKey'], sortDirection: PatientListParams['sortDirection'] = 'asc'): string {
+  const direction = sortDirection === 'desc' ? 'DESC' : 'ASC'
+
+  switch (sortKey) {
+    case 'name':
+      return `ORDER BY nume ${direction}, prenume ${direction}, id ${direction}`
+    case 'age':
+      return `ORDER BY varsta ${direction}, nume ASC, prenume ASC, id ASC`
+    case 'nid':
+      return `ORDER BY cod ${direction}, pn_code ${direction}, nume ASC, prenume ASC, id ASC`
+    case 'locality':
+      return `ORDER BY domiciliu_localitate ${direction} NULLS LAST, resedinta_localitate ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+    case 'emailMobile':
+      return `ORDER BY email ${direction} NULLS LAST, mobil ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+    case 'medicCurant':
+      return `ORDER BY medic_curant ${direction}, medic_initial ${direction}, nume ASC, prenume ASC, id ASC`
+    case 'medicFamilie':
+      return `ORDER BY medic_familie_nume ${direction} NULLS LAST, medic_familie_email ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+    case 'status':
+      return `ORDER BY is_verified ${direction}, nume ASC, prenume ASC, id ASC`
+    case 'createdFrom':
+      return `ORDER BY sursa_informare ${direction} NULLS LAST, nume ASC, prenume ASC, id ASC`
+    default:
+      return ORDER_BY
   }
 }
 
@@ -125,6 +308,231 @@ export const patientRepository = {
     return result.rows.map(rowToPatient)
   },
 
+async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
+  const { whereClause, values } = buildPatientListWhere(params)
+  const sortKey = params.sortKey
+  const direction = params.sortDirection === 'desc' ? 'DESC' : 'ASC'
+  const orderBy = buildOrderBy(sortKey, params.sortDirection)
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 100)
+  const allValues = [...values]
+  let cursorClause = ''
+
+  if (params.cursor) {
+    const c = params.cursor
+    const op = direction === 'ASC' ? '>' : '<'
+    const opNulls = direction === 'ASC' ? 'IS NOT NULL' : 'IS NULL'
+
+    const addCursor = (clause: string, ...cursorValues: unknown[]) => {
+      // Replace __P1__, __P2__ etc with sequential parameter indices
+      let result = clause
+      cursorValues.forEach((val, i) => {
+        const idx = allValues.length + 1
+        result = result.replace(`__P${i + 1}__`, `$${idx}`)
+        allValues.push(val)
+      })
+      cursorClause = result
+    }
+
+    switch (c.sortKey) {
+      case 'default':
+        addCursor(
+          `AND (data_introducerii, id) ${op} (__P1__::timestamptz, __P2__::uuid)`,
+          c.dataIntroducerii, c.id
+        )
+        break
+
+      case 'name':
+        addCursor(
+          `AND (nume, prenume, id) ${op} (__P1__, __P2__, __P3__::uuid)`,
+          c.nume, c.prenume, c.id
+        )
+        break
+
+      case 'age':
+        // age tiebreaker is always ASC regardless of direction
+        addCursor(
+          `AND (varsta, id) ${op} (__P1__::smallint, __P2__::uuid)`,
+          c.varsta, c.id
+        )
+        break
+
+      case 'nid':
+        addCursor(
+          `AND (cod, pn_code, id) ${op} (__P1__, __P2__, __P3__::uuid)`,
+          c.cod, c.pnCode, c.id
+        )
+        break
+
+      case 'locality':
+        if (c.domiciliuLocalitate === null) {
+          // nulls are last for ASC, first for DESC
+          // when cursor value is null, next page also has nulls or nothing
+          cursorClause = direction === 'ASC'
+            ? `AND domiciliu_localitate IS NULL AND id ${op} $${allValues.length + 1}::uuid`
+            : `AND (domiciliu_localitate IS NOT NULL OR (domiciliu_localitate IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
+          allValues.push(c.id)
+        } else {
+          addCursor(
+            `AND (domiciliu_localitate ${op} __P1__ OR (domiciliu_localitate = __P1__ AND id ${op} __P2__::uuid))`,
+            c.domiciliuLocalitate, c.id
+          )
+        }
+        break
+
+      case 'emailMobile':
+        if (c.email === null) {
+          cursorClause = direction === 'ASC'
+            ? `AND email IS NULL AND id ${op} $${allValues.length + 1}::uuid`
+            : `AND (email IS NOT NULL OR (email IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
+          allValues.push(c.id)
+        } else {
+          addCursor(
+            `AND (email ${op} __P1__ OR (email = __P1__ AND id ${op} __P2__::uuid))`,
+            c.email, c.id
+          )
+        }
+        break
+
+      case 'medicCurant':
+        addCursor(
+          `AND (medic_curant, id) ${op} (__P1__, __P2__::uuid)`,
+          c.medicCurant, c.id
+        )
+        break
+
+      case 'medicFamilie':
+        if (c.medicFamilieNume === null) {
+          cursorClause = direction === 'ASC'
+            ? `AND medic_familie_nume IS NULL AND id ${op} $${allValues.length + 1}::uuid`
+            : `AND (medic_familie_nume IS NOT NULL OR (medic_familie_nume IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
+          allValues.push(c.id)
+        } else {
+          addCursor(
+            `AND (medic_familie_nume ${op} __P1__ OR (medic_familie_nume = __P1__ AND id ${op} __P2__::uuid))`,
+            c.medicFamilieNume, c.id
+          )
+        }
+        break
+
+      case 'status':
+        // boolean: false < true
+        addCursor(
+          `AND (is_verified::int, id) ${op} (__P1__::int, __P2__::uuid)`,
+          c.isVerified ? 1 : 0, c.id
+        )
+        break
+
+      case 'createdFrom':
+        if (c.sursaInformare === null) {
+          cursorClause = direction === 'ASC'
+            ? `AND sursa_informare IS NULL AND id ${op} $${allValues.length + 1}::uuid`
+            : `AND (sursa_informare IS NOT NULL OR (sursa_informare IS NULL AND id ${op} $${allValues.length + 1}::uuid))`
+          allValues.push(c.id)
+        } else {
+          addCursor(
+            `AND (sursa_informare ${op} __P1__ OR (sursa_informare = __P1__ AND id ${op} __P2__::uuid))`,
+            c.sursaInformare, c.id
+          )
+        }
+        break
+    }
+  }
+
+  const whereWithCursor = whereClause
+    ? `${whereClause} ${cursorClause}`
+    : cursorClause ? `WHERE 1=1 ${cursorClause}` : ''
+
+  const sql = `
+    SELECT ${LIST_SELECT_COLUMNS}
+    FROM patients
+    ${whereWithCursor}
+    ${orderBy}
+    LIMIT $${allValues.length + 1}
+  `
+  allValues.push(limit + 1)
+
+  const result = await db.query(sql, allValues)
+  const rows = result.rows.slice(0, limit)
+  const hasMore = result.rows.length > limit
+  const lastRow = rows[rows.length - 1]
+
+  // Build next cursor from last row based on current sort
+  let nextCursor: SortCursor | null = null
+  if (hasMore && lastRow) {
+    const effectiveSortKey = sortKey ?? 'default'
+    switch (effectiveSortKey) {
+      case 'name':
+        nextCursor = { sortKey: 'name', nume: lastRow.nume, prenume: lastRow.prenume, id: lastRow.id }
+        break
+      case 'age':
+        nextCursor = { sortKey: 'age', varsta: lastRow.varsta, id: lastRow.id }
+        break
+      case 'nid':
+        nextCursor = { sortKey: 'nid', cod: lastRow.cod, pnCode: lastRow.pn_code, id: lastRow.id }
+        break
+      case 'locality':
+        nextCursor = { sortKey: 'locality', domiciliuLocalitate: lastRow.domiciliu_localitate ?? null, id: lastRow.id }
+        break
+      case 'emailMobile':
+        nextCursor = { sortKey: 'emailMobile', email: lastRow.email ?? null, id: lastRow.id }
+        break
+      case 'medicCurant':
+        nextCursor = { sortKey: 'medicCurant', medicCurant: lastRow.medic_curant, id: lastRow.id }
+        break
+      case 'medicFamilie':
+        nextCursor = { sortKey: 'medicFamilie', medicFamilieNume: lastRow.medic_familie_nume ?? null, id: lastRow.id }
+        break
+      case 'status':
+        nextCursor = { sortKey: 'status', isVerified: Boolean(lastRow.is_verified), id: lastRow.id }
+        break
+      case 'createdFrom':
+        nextCursor = { sortKey: 'createdFrom', sursaInformare: lastRow.sursa_informare ?? null, id: lastRow.id }
+        break
+      default:
+        nextCursor = { sortKey: 'default', dataIntroducerii: lastRow.data_introducerii, id: lastRow.id }
+        break
+    }
+  }
+
+  return {
+    items: rows.map(rowToPatient),
+    total: null,
+    limit,
+    hasMore,
+    nextCursor,
+  }
+},
+
+  async count(params: PatientListParams = {}): Promise<PatientsCountResult> {
+    const { whereClause, values } = buildPatientListWhere(params)
+    const countStartTime = Date.now()
+    const countSql = `SELECT COUNT(*)::int AS total
+       FROM patients
+       ${whereClause}`
+
+    console.log('[patients] filtered COUNT sql', {
+      sql: countSql,
+      values,
+    })
+
+    const result = await db.query(countSql, values)
+    const total = Number(result.rows[0]?.total ?? 0)
+
+    logPatientsQuery('filtered COUNT', countStartTime, {
+      filtersCount: values.length,
+      total,
+    })
+
+    return { total }
+  },
+
+  async approximateCount(): Promise<number> {
+  const result = await db.query(
+    `SELECT reltuples::bigint AS estimate FROM pg_class WHERE relname = 'patients'`
+  )
+  return Number(result.rows[0]?.estimate ?? 0)
+},
+
   async findById(id: string): Promise<Patient | null> {
     const result = await db.query('SELECT * FROM patients WHERE id = $1', [id])
     return result.rows[0] ? rowToPatient(result.rows[0]) : null
@@ -147,21 +555,17 @@ export const patientRepository = {
 
   async findFirstNavigation(query?: string): Promise<PatientNavigationResult> {
     const { whereClause, values } = buildSearchFilter(query)
+    // Avoid window functions over the full table — the first row always has
+    // previous_id = NULL, so we only need: the first row, the second row's id,
+    // and a plain count. Each can use an index on (data_introducerii, id).
     const result = await db.query(
-      `WITH filtered AS (
-         SELECT * FROM patients
-         ${whereClause}
-       ),
-       ordered AS (
-         SELECT
-           *,
-           lag(id) OVER (${ORDER_BY}) AS previous_id,
-           lead(id) OVER (${ORDER_BY}) AS next_id,
-           COUNT(*) OVER ()::int AS total_count
-         FROM filtered
-       )
-       SELECT *
-       FROM ordered
+      `SELECT
+         p.*,
+         NULL AS previous_id,
+         (SELECT id FROM patients ${whereClause} ${ORDER_BY} OFFSET 1 LIMIT 1) AS next_id,
+         (SELECT COUNT(*)::int FROM patients ${whereClause}) AS total_count
+       FROM patients p
+       ${whereClause}
        ${ORDER_BY}
        LIMIT 1`,
       values
@@ -182,24 +586,27 @@ export const patientRepository = {
   async findNavigationById(id: string, query?: string): Promise<PatientNavigationResult | null> {
     const { whereClause, values } = buildSearchFilter(query)
     const idIndex = values.length + 1
+    // Build a clause we can append AND conditions to for prev/next subqueries
+    const filterAnd = whereClause ? `${whereClause} AND` : 'WHERE'
 
+    // Avoid window functions over the full table.
+    // Instead: fetch the current row, then find its neighbours by comparing
+    // (data_introducerii, id) against the sort key of the current patient.
+    // Each subquery can use an index on (data_introducerii, id).
     const result = await db.query(
-      `WITH filtered AS (
-         SELECT * FROM patients
-         ${whereClause}
-       ),
-       ordered AS (
-         SELECT
-           *,
-           lag(id) OVER (${ORDER_BY}) AS previous_id,
-           lead(id) OVER (${ORDER_BY}) AS next_id,
-           COUNT(*) OVER ()::int AS total_count
-         FROM filtered
+      `WITH current_patient AS (
+         SELECT * FROM patients WHERE id = $${idIndex}
        )
-       SELECT *
-       FROM ordered
-       WHERE id = $${idIndex}
-       LIMIT 1`,
+       SELECT
+         cp.*,
+         (SELECT id FROM patients
+          ${filterAnd} (data_introducerii, id) < (cp.data_introducerii, cp.id)
+          ORDER BY data_introducerii DESC, id DESC LIMIT 1) AS previous_id,
+         (SELECT id FROM patients
+          ${filterAnd} (data_introducerii, id) > (cp.data_introducerii, cp.id)
+          ORDER BY data_introducerii ASC, id ASC LIMIT 1) AS next_id,
+         (SELECT COUNT(*)::int FROM patients ${whereClause}) AS total_count
+       FROM current_patient cp`,
       [...values, id]
     )
 

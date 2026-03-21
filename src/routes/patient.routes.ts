@@ -1,9 +1,21 @@
 import { Router, Request, Response } from 'express'
-import { patientRepository } from '../repositories/patient.repository'
-import { createPatientSchema, updatePatientSchema, verificationSchema } from '../schemas/patient.schema'
+import { patientRepository, SortCursor } from '../repositories/patient.repository'
+import { createPatientSchema, patientListQuerySchema, updatePatientSchema, verificationSchema } from '../schemas/patient.schema'
 import { validate } from '../middleware/validate'
 
 export const patientRouter = Router()
+
+
+function logRequestError(req: Request, err: unknown): void {
+  console.error('[request error]', {
+    method: req.method,
+    path: req.path,
+    params: req.params,
+    query: req.query,
+    body: req.body,
+    error: err,
+  })
+}
 
 async function handleUpdatePatient(req: Request, res: Response): Promise<void> {
   try {
@@ -18,7 +30,7 @@ async function handleUpdatePatient(req: Request, res: Response): Promise<void> {
     }
     res.json(result.patient)
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 }
@@ -32,21 +44,130 @@ async function handleUpdatePatientVerification(req: Request, res: Response): Pro
     }
     res.json(patient)
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 }
 
+function parseCursorFromQuery(query: Record<string, unknown>): SortCursor | undefined {
+  const sortKey = query.cursorSortKey as string | undefined
+  const id = query.cursorId as string | undefined
+  if (!sortKey || !id) return undefined
+
+  switch (sortKey) {
+    case 'name':
+      if (query.cursorNume && query.cursorPrenume)
+        return { sortKey: 'name', nume: String(query.cursorNume), prenume: String(query.cursorPrenume), id }
+      break
+    case 'age':
+      if (query.cursorVarsta)
+        return { sortKey: 'age', varsta: Number(query.cursorVarsta), id }
+      break
+    case 'nid':
+      if (query.cursorCod !== undefined)
+        return { sortKey: 'nid', cod: String(query.cursorCod), pnCode: String(query.cursorPnCode ?? ''), id }
+      break
+    case 'locality':
+      return { sortKey: 'locality', domiciliuLocalitate: query.cursorLocalitate ? String(query.cursorLocalitate) : null, id }
+    case 'emailMobile':
+      return { sortKey: 'emailMobile', email: query.cursorEmail ? String(query.cursorEmail) : null, id }
+    case 'medicCurant':
+      if (query.cursorMedicCurant)
+        return { sortKey: 'medicCurant', medicCurant: String(query.cursorMedicCurant), id }
+      break
+    case 'medicFamilie':
+      return { sortKey: 'medicFamilie', medicFamilieNume: query.cursorMedicFamilie ? String(query.cursorMedicFamilie) : null, id }
+    case 'status':
+      return { sortKey: 'status', isVerified: query.cursorIsVerified === 'true', id }
+    case 'createdFrom':
+      return { sortKey: 'createdFrom', sursaInformare: query.cursorSursaInformare ? String(query.cursorSursaInformare) : null, id }
+    case 'default':
+      if (query.cursorDate)
+        return { sortKey: 'default', dataIntroducerii: String(query.cursorDate), id }
+      break
+  }
+  return undefined
+}
+
 // GET /api/patients — list all, or search with ?q=
 patientRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+  const requestStartTime = Date.now()
   try {
-    const query = req.query.q as string | undefined
-    const patients = query
-      ? await patientRepository.search(query)
-      : await patientRepository.findAll()
-    res.json(patients)
+    const parsedQuery = patientListQuerySchema.safeParse(req.query)
+
+    if (!parsedQuery.success) {
+      res.status(400).json({
+        error: 'Invalid patient list query parameters',
+        details: parsedQuery.error.flatten(),
+      })
+      return
+    }
+
+    const query = parsedQuery.data
+    console.log('[patients] GET /api/patients request', {
+      durationMs: Date.now() - requestStartTime,
+      query,
+    })
+
+    const paginatedPatients = await patientRepository.list({
+      ...query,
+      cursor: parseCursorFromQuery(req.query),
+    })
+
+    console.log('[patients] GET /api/patients response', {
+      durationMs: Date.now() - requestStartTime,
+      mode: 'paginated',
+      itemCount: paginatedPatients.items.length,
+      hasMore: paginatedPatients.hasMore,
+      limit: paginatedPatients.limit,
+      nextCursor: paginatedPatients.nextCursor,
+    })
+
+    res.json(paginatedPatients)
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+patientRouter.get('/count', async (req: Request, res: Response): Promise<void> => {
+  const requestStartTime = Date.now()
+  try {
+    const parsedQuery = patientListQuerySchema.safeParse(req.query)
+
+    if (!parsedQuery.success) {
+      res.status(400).json({
+        error: 'Invalid patient count query parameters',
+        details: parsedQuery.error.flatten(),
+      })
+      return
+    }
+
+    const query = parsedQuery.data
+    console.log('[patients] GET /api/patients/count request', {
+      durationMs: Date.now() - requestStartTime,
+      query,
+    })
+
+    const countResult = await patientRepository.count(query)
+    console.log('[patients] GET /api/patients/count response', {
+      durationMs: Date.now() - requestStartTime,
+      total: countResult.total,
+    })
+
+    res.json(countResult)
+  } catch (err) {
+    logRequestError(req, err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+patientRouter.get('/count/approximate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const total = await patientRepository.approximateCount()
+    res.json({ total })
+  } catch (err) {
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -58,7 +179,7 @@ patientRouter.get('/navigation/first', async (req: Request, res: Response): Prom
     const navigation = await patientRepository.findFirstNavigation(query)
     res.json(navigation)
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -74,7 +195,7 @@ patientRouter.get('/navigation/:id', async (req: Request, res: Response): Promis
     }
     res.json(navigation)
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -89,7 +210,7 @@ patientRouter.get('/:id', async (req: Request, res: Response): Promise<void> => 
     }
     res.json(patient)
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -109,7 +230,7 @@ patientRouter.post(
       const patient = await patientRepository.create(req.body)
       res.status(201).json(patient)
     } catch (err) {
-      console.error(err)
+      logRequestError(req, err)
       res.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -146,7 +267,7 @@ patientRouter.delete('/:id', async (req: Request, res: Response): Promise<void> 
     }
     res.status(204).send()
   } catch (err) {
-    console.error(err)
+    logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
