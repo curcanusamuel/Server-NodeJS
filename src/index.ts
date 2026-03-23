@@ -11,12 +11,15 @@ import authRoutes from './routes/auth/authRoutes'
 import adminSettingsRoutes from './routes/admin/adminSettingsRoutes'
 import adminAccountRoutes from './routes/admin/adminAccountsRoutes'
 import clientSettingsRoutes from './routes/client/clientSettingsRoutes'
+import { mediaRouter } from './routes/istoricMedia/istoricMedia.routes'
+import { limiter } from './middleware/rateLimiter'
 
 dotenv.config()
 
 const PgSession = connectPgSimple(session)
 
 const app = express()
+//app.set('trust proxy', 1) // tells express to read the real IP from X-Forwarded-For header, only set in production
 const PORT = Number(process.env.PORT) || 3000
 const HOST = process.env.HOST || '0.0.0.0'
 
@@ -64,11 +67,12 @@ initDb()
     })
 
     // ── Routes ──────────────────────────────────────────────
-    app.use('/auth', authRoutes)
-    app.use('/api/admin', adminSettingsRoutes)
-    app.use('/api/admin/accounts', adminAccountRoutes)
-    app.use('/api/client', clientSettingsRoutes)
-    app.use('/api/patients', patientRouter)
+    app.use('/auth', limiter.auth, authRoutes)
+    app.use('/api/admin', limiter.admin, adminSettingsRoutes)
+    app.use('/api/admin/accounts', limiter.admin, adminAccountRoutes)
+    app.use('/api/client', limiter.api, clientSettingsRoutes)
+    app.use('/api/patients', limiter.api, patientRouter)
+    app.use('/api/media',limiter.api, mediaRouter)
 
     // Health check
     app.get('/health', async (_req: Request, res: Response) => {
