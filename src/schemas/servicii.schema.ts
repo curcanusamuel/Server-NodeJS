@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const createServiciuSchema = z.object({
   zkIdmoduleF: z.string().uuid(),
+  zkIdsubcategorieF: z.string().uuid(),
   codProcedura: z.string().max(50).nullable().optional(),
   nume: z.string().min(1).max(200),
   pretBaza: z.number().positive(),
@@ -14,6 +15,7 @@ export const createServiciuSchema = z.object({
 
 export const updateServiciuSchema = z.object({
   zkIdmoduleF: z.string().uuid().optional(),
+  zkIdsubcategorieF: z.string().uuid().optional(),
   codProcedura: z.string().max(50).nullable().optional(),
   nume: z.string().min(1).max(200).optional(),
   pretBaza: z.number().positive().optional(),

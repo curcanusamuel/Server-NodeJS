@@ -112,7 +112,6 @@ export const discounturiRepository = {
   },
 
   async getActivePrice(servicuId: string, doctorId: string | null, date: string): Promise<number | null> {
-    // Tier 1: promotion
     let result = await db.query(
       `SELECT pret FROM discounturi
        WHERE zk_pret_id_f = $1
@@ -126,7 +125,6 @@ export const discounturiRepository = {
     )
     if (result.rows[0]) return Number(result.rows[0].pret)
 
-    // Tier 2: doctor-specific
     if (doctorId) {
       result = await db.query(
         `SELECT pret FROM discounturi
@@ -143,7 +141,6 @@ export const discounturiRepository = {
       if (result.rows[0]) return Number(result.rows[0].pret)
     }
 
-    // Tier 3a: active base price
     result = await db.query(
       `SELECT pret FROM discounturi
        WHERE zk_pret_id_f = $1
@@ -157,7 +154,6 @@ export const discounturiRepository = {
     )
     if (result.rows[0]) return Number(result.rows[0].pret)
 
-    // Tier 3b: nearest base price
     result = await db.query(
       `SELECT pret FROM discounturi
        WHERE zk_pret_id_f = $1
@@ -169,7 +165,6 @@ export const discounturiRepository = {
     )
     if (result.rows[0]) return Number(result.rows[0].pret)
 
-    // Final fallback: pret_baza from servicii
     result = await db.query(
       `SELECT pret_baza FROM servicii WHERE zk_preturi_id_p = $1`,
       [servicuId]
@@ -218,14 +213,15 @@ export const discounturiRepository = {
     const existing = await this.findById(id)
     if (!existing) return { status: 'not_found' }
 
-    // If dates are changing, re-check overlap against the existing record's type/service
+    const nextType = data.type ?? existing.type
+    const nextDoctorId = Object.prototype.hasOwnProperty.call(data, 'zkDoctorIdF') ? (data.zkDoctorIdF ?? null) : existing.zkDoctorIdF
     const newStartDate = data.startDate ?? existing.startDate
-    const newEndDate = 'endDate' in data ? data.endDate : existing.endDate
+    const newEndDate = Object.prototype.hasOwnProperty.call(data, 'endDate') ? (data.endDate ?? null) : existing.endDate
 
     const conflictId = await checkOverlap(
       existing.zkPretIdF,
-      existing.zkDoctorIdF,
-      existing.type,
+      nextDoctorId,
+      nextType,
       newStartDate,
       newEndDate,
       id
@@ -237,17 +233,19 @@ export const discounturiRepository = {
     let i = 1
 
     const fieldMap: Record<string, string> = {
+      zkDoctorIdF: 'zk_doctor_id_f',
       numelePretului: 'numele_pretului',
       pret: 'pret',
       startDate: 'start_date',
       endDate: 'end_date',
+      type: 'type',
       isDisabled: 'is_disabled',
     }
 
     for (const [key, col] of Object.entries(fieldMap)) {
-      if (key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
         fields.push(`${col} = $${i++}`)
-        values.push((data as Record<string, unknown>)[key])
+        values.push((data as Record<string, unknown>)[key] ?? null)
       }
     }
 

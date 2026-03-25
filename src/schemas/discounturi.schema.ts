@@ -26,13 +26,27 @@ export const createDiscountSchema = z.object({
 )
 
 export const updateDiscountSchema = z.object({
+  zkDoctorIdF: z.string().uuid().nullable().optional(),
   numelePretului: z.string().min(1).max(200).optional(),
   pret: z.number().positive().optional(),
   startDate: z.string().date().optional(),
   endDate: z.string().date().nullable().optional(),
+  type: discountTypeEnum.optional(),
   isDisabled: z.boolean().optional(),
   modificationAccount: z.string().min(1).max(100),
-})
+}).refine(
+  (data) => data.type === undefined || data.type === 'doctor' ? true : data.zkDoctorIdF == null || data.zkDoctorIdF === undefined,
+  {
+    message: 'zkDoctorIdF must be null for non-doctor types',
+    path: ['zkDoctorIdF'],
+  }
+).refine(
+  (data) => data.type !== 'doctor' || data.zkDoctorIdF != null,
+  {
+    message: 'zkDoctorIdF is required for type "doctor"',
+    path: ['zkDoctorIdF'],
+  }
+)
 
 export const discountListQuerySchema = z.object({
   servicuId: z.string().uuid().optional(),

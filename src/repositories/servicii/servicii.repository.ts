@@ -10,6 +10,7 @@ function rowToServiciu(row: Record<string, unknown>): Serviciu {
   return {
     id: row.zk_preturi_id_p as string,
     zkIdmoduleF: row.zk_idmodule_f as string,
+    zkIdsubcategorieF: row.zk_idsubcategorie_f as string,
     codProcedura: (row.cod_procedura as string | null) ?? null,
     nume: row.nume as string,
     pretBaza: Number(row.pret_baza),
@@ -85,6 +86,7 @@ export const serviciiRepository = {
       const serviciiResult = await client.query(
         `INSERT INTO servicii (
           zk_idmodule_f,
+          zk_idsubcategorie_f,
           cod_procedura,
           nume,
           pret_baza,
@@ -93,10 +95,11 @@ export const serviciiRepository = {
           firma,
           is_cas,
           created_account
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
         [
           data.zkIdmoduleF,
+          data.zkIdsubcategorieF,
           data.codProcedura ?? null,
           data.nume,
           data.pretBaza,
@@ -147,6 +150,7 @@ export const serviciiRepository = {
 
     const fieldMap: Record<string, string> = {
       zkIdmoduleF: 'zk_idmodule_f',
+      zkIdsubcategorieF: 'zk_idsubcategorie_f',
       codProcedura: 'cod_procedura',
       nume: 'nume',
       pretBaza: 'pret_baza',
@@ -182,10 +186,27 @@ export const serviciiRepository = {
   },
 
   async delete(id: string): Promise<boolean> {
-    const result = await db.query(
-      `DELETE FROM servicii WHERE zk_preturi_id_p = $1`,
-      [id]
-    )
-    return (result.rowCount ?? 0) > 0
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+
+      await client.query(
+        `DELETE FROM discounturi WHERE zk_pret_id_f = $1`,
+        [id]
+      )
+
+      const result = await client.query(
+        `DELETE FROM servicii WHERE zk_preturi_id_p = $1`,
+        [id]
+      )
+
+      await client.query('COMMIT')
+      return (result.rowCount ?? 0) > 0
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
   },
 }

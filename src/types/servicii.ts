@@ -1,6 +1,7 @@
 export interface Serviciu {
   id: string
   zkIdmoduleF: string
+  zkIdsubcategorieF: string
   codProcedura: string | null
   nume: string
   pretBaza: number
