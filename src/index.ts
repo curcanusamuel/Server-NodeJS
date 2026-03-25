@@ -12,6 +12,11 @@ import adminSettingsRoutes from './routes/admin/adminSettingsRoutes'
 import adminAccountRoutes from './routes/admin/adminAccountsRoutes'
 import clientSettingsRoutes from './routes/client/clientSettingsRoutes'
 import { mediaRouter } from './routes/istoricMedia/istoricMedia.routes'
+import { moduleRouter } from './routes/module/module.routes'
+import { doctorRouter } from './routes/doctor/doctor.routes'
+import { serviciiRouter } from './routes/servicii/servicii.routes'
+import { discounturiRouter } from './routes/discounturi/discounturi.routes'
+import { subcategorieRouter } from './routes/subcategorie/subcategorie.routes'
 import { limiter } from './middleware/rateLimiter'
 
 dotenv.config()
@@ -73,6 +78,11 @@ initDb()
     app.use('/api/client', limiter.api, clientSettingsRoutes)
     app.use('/api/patients', limiter.api, patientRouter)
     app.use('/api/media',limiter.api, mediaRouter)
+    app.use('/api/modules', limiter.api, moduleRouter)
+    app.use('/api/doctors', limiter.api, doctorRouter)
+    app.use('/api/servicii', limiter.api, serviciiRouter)
+    app.use('/api/discounturi', limiter.api, discounturiRouter)
+    app.use('/api/subcategorie', limiter.api, subcategorieRouter)
 
     // Health check
     app.get('/health', async (_req: Request, res: Response) => {
