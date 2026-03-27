@@ -2,6 +2,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import { Request, Response, NextFunction } from 'express'
 
 const WINDOW_15_MIN = 15 * 60 * 1000
+const WINDOW_10_MIN = 10 * 60 * 1000
 const WINDOW_1_HOUR = 60 * 60 * 1000
 const WINDOW_1_MIN  = 60 * 1000
 
@@ -40,7 +41,7 @@ function makeResourceLimiter(resource: string) {
 }
 
 export const limiter = {
-  auth:        rateLimit({ windowMs: WINDOW_15_MIN, max: 10, standardHeaders: true, legacyHeaders: false }),
+  auth:        rateLimit({ windowMs: WINDOW_10_MIN, max: 10, standardHeaders: true, legacyHeaders: false }),
   admin:       rateLimit({ windowMs: WINDOW_1_HOUR, max: 100, standardHeaders: true, legacyHeaders: false }),
   patients:    makeResourceLimiter('patients'),
   media:       makeResourceLimiter('media'),
