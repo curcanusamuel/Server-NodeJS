@@ -37,7 +37,7 @@ mediaRouter.get('/patient/:patientId', async (req: Request, res: Response): Prom
     const itemsWithUrls = await Promise.all(
       items.map(async (item) => ({
         ...item,
-        downloadUrl: await s3Service.getPresignedDownloadUrl(item.mediaURL),
+        downloadUrl: await s3Service.getPresignedDownloadUrl(item.mediaURL, item.mediaName),
       }))
     )
 
@@ -78,7 +78,7 @@ mediaRouter.post('/presign', async (req: Request, res: Response): Promise<void> 
 // POST /api/media
 mediaRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { mediaName, mediaURL, mediaType, dataDocument, notite, createdAccount, zkIDPacientF } = req.body
+    const { mediaName, mediaURL, mediaType, dataDocument, createdAccount, zkIDPacientF } = req.body
 
     if (!mediaName || !mediaURL || !mediaType || !dataDocument || !createdAccount || !zkIDPacientF) {
       res.status(400).json({ error: 'Missing required fields: mediaName, mediaURL, mediaType, dataDocument, createdAccount, zkIDPacientF' })
@@ -95,10 +95,43 @@ mediaRouter.post('/', async (req: Request, res: Response): Promise<void> => {
     // Attach downloadUrl so the frontend can display immediately after upload
     const mediaWithUrl = {
       ...media,
-      downloadUrl: await s3Service.getPresignedDownloadUrl(media.mediaURL),
+      downloadUrl: await s3Service.getPresignedDownloadUrl(media.mediaURL, media.mediaName),
     }
 
     res.status(201).json(mediaWithUrl)
+  } catch (err) {
+    logRequestError(req, err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PUT /api/media/:id
+mediaRouter.put('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { mediaType } = req.body
+
+    if (mediaType !== undefined && !isValidMediaType(mediaType)) {
+      res.status(400).json({ error: `Invalid mediaType. Must be one of: ${VALID_MEDIA_TYPES.join(', ')}` })
+      return
+    }
+
+    if (!req.body.modificationAccount) {
+      res.status(400).json({ error: 'modificationAccount is required for updates' })
+      return
+    }
+
+    const media = await mediaRepository.update(req.params.id, req.body)
+    if (!media) {
+      res.status(404).json({ error: 'Media not found' })
+      return
+    }
+
+    const mediaWithUrl = {
+      ...media,
+      downloadUrl: await s3Service.getPresignedDownloadUrl(media.mediaURL, media.mediaName),
+    }
+
+    res.json(mediaWithUrl)
   } catch (err) {
     logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })
@@ -128,7 +161,7 @@ mediaRouter.patch('/:id', async (req: Request, res: Response): Promise<void> => 
 
     const mediaWithUrl = {
       ...media,
-      downloadUrl: await s3Service.getPresignedDownloadUrl(media.mediaURL),
+      downloadUrl: await s3Service.getPresignedDownloadUrl(media.mediaURL, media.mediaName),
     }
 
     res.json(mediaWithUrl)

@@ -36,11 +36,15 @@ async function fetchSecret(secretId: string): Promise<Record<string, string>> {
 export async function initDb(): Promise<void> {
   let secretValues: Record<string, string> = {};
 
-  try {
-    secretValues = await fetchSecret("dev/idsclinic/db");
-    console.log('[db] loaded credentials from AWS Secrets Manager');
-  } catch (err) {
-    console.warn('[db] could not fetch AWS secret, falling back to env vars:', (err as Error).message);
+  if (process.env.NODE_ENV === 'dev') {
+    console.log('[db] NODE_ENV=dev, using env vars instead of AWS Secrets Manager');
+  } else {
+    try {
+      secretValues = await fetchSecret("dev/idsclinic/db");
+      console.log('[db] loaded credentials from AWS Secrets Manager');
+    } catch (err) {
+      console.warn('[db] could not fetch AWS secret, falling back to env vars:', (err as Error).message);
+    }
   }
 
   try {
@@ -58,10 +62,10 @@ export async function initDb(): Promise<void> {
 
   const config: PoolConfig = {
     host,
-    port: Number(secretValues.port) || 5432,
-    database: secretValues.engine ?? 'ids_clinic',
-    user: secretValues.username ?? 'postgres',
-    password: secretValues.password ?? '',
+    port: Number(secretValues.port) || Number(process.env.DB_PORT) || 5432,
+    database: secretValues.engine ?? process.env.DB_NAME ?? 'ids_clinic',
+    user: secretValues.username ?? process.env.DB_USER ?? 'postgres',
+    password: secretValues.password ?? process.env.DB_PASSWORD ?? '',
     ssl: shouldUseSsl ? { rejectUnauthorized } : undefined,
 
     max: Number(process.env.DB_POOL_MAX) || 20,

@@ -153,7 +153,7 @@ if (tokens.length === 1) {
 
   const localityPattern = toContainsPattern(params.localitate)
   if (localityPattern) {
-    pushCondition('(domiciliu_localitate ILIKE __PARAM__ OR resedinta_localitate ILIKE __PARAM__)', localityPattern)
+    pushCondition('domiciliu_localitate ILIKE __PARAM__', localityPattern)
   }
 
   const emailPattern = toContainsPattern(params.email)
@@ -318,7 +318,7 @@ async list(params: PatientListParams = {}): Promise<PaginatedPatientsResult> {
   if (params.cursor) {
     const c = params.cursor
     const op = direction === 'ASC' ? '>' : '<'
-    const opNulls = direction === 'ASC' ? 'IS NOT NULL' : 'IS NULL'
+
 
     const addCursor = (clause: string, ...cursorValues: unknown[]) => {
       // Replace __P1__, __P2__ etc with sequential parameter indices.

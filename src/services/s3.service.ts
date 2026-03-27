@@ -83,9 +83,16 @@ export const s3Service = {
    */
   async getPresignedDownloadUrl(
     s3Key: string,
+    fileName?: string,
     expiresInSeconds = 3600 // 1 hour default
   ): Promise<string> {
-    const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key })
+    const command = new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: s3Key,
+      ResponseContentDisposition: fileName
+        ? `inline; filename="${encodeURIComponent(fileName)}"`
+        : undefined,
+    })
     return getSignedUrl(s3, command, { expiresIn: expiresInSeconds })
   },
 

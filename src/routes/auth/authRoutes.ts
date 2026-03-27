@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db as pool } from "../../db/pool";
 import bcrypt from "bcrypt";
+import { limiter } from "../../middleware/rateLimiter";
 
 const router = Router();
 
@@ -44,6 +45,8 @@ router.post("/login", async (req, res) => {
       username: user.username,
       role: user.role,
     };
+
+    limiter.auth.resetKey(req.ip ?? '')
 
     res.json({
       message: "Logged in",
