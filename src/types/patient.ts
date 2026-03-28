@@ -72,6 +72,7 @@ export interface Patient {
   casEminent: string | null
   casCodEminent: string | null
   casCategorieAsigurat: string | null
+  contactRefuzat: boolean
   isVerified: boolean
 }
 
