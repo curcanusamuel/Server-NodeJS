@@ -148,10 +148,34 @@ router.put("/users/:id", async (req, res) => {
 
 //update password endpoint
 router.put("/users/:id/password", async (req, res) => {
-    const { password } = req.body;
-    const hash = await bcrypt.hash(password, 10);
-    await pool.query("UPDATE app_user SET password_hash=$1 WHERE id=$2", [hash, req.params.id]);
-    res.json({ success: true });
+    try {
+        const sessionUser = (req.session as any).user;
+
+        if (!sessionUser || sessionUser.role !== "ADMIN") {
+            return res.status(403).json({ error: "Acces interzis" });
+        }
+
+        const { password } = req.body;
+
+        if (!password) {
+            return res.status(400).json({ error: "Parola este obligatorie" });
+        }
+
+        const hash = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            "UPDATE app_user SET password_hash=$1, updated_at=NOW() WHERE id=$2 RETURNING id",
+            [hash, req.params.id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Utilizatorul nu a fost găsit" });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("PUT /users/:id/password error:", err);
+        res.status(500).json({ error: "Eroare server" });
+    }
 });
 
 
