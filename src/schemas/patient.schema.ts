@@ -49,7 +49,7 @@ const nullableEmailOrContactRefusal = z.preprocess(
   (value) => (value === '' ? null : value),
   z.union([
     z.string().email('Email invalid'),
-    z.literal('Refuză persoana de contact'),
+    z.literal('REFUSE'),
   ]).nullable().optional()
 )
 const nullableDate = z.preprocess(
@@ -63,15 +63,15 @@ export const createPatientSchema = z.object({
   nr: z.string().default(''),
   nid: z.string().default(''),
   varsta: z.number().int().min(0).max(150),
-  sex: z.enum(['Masculin', 'Feminin', 'Altul']),
-  tipActului: z.enum(['BI', 'CI', 'Pasaport', 'Sedere']),
+  sex: z.enum(['M', 'F', 'O']),
+  tipActului: z.enum(['BI', 'CI', 'PP', 'RC']),
   codCNP: z.string().length(13, 'CNP trebuie să aibă 13 caractere'),
   buletinSerie: z.string().default(''),
   buletinNr: z.string().default(''),
   eliberatDe: z.string().default(''),
   valabilPana: z.coerce.date(),
   dataNasterii: z.coerce.date(),
-  cetatenie: z.string().default('Romania'),
+  cetatenie: z.string().default('RO'),
   cetatenie2: z.string().default(''),
   ocupatie: z.string().default(''),
   educatie: z.string().default(''),
@@ -128,6 +128,7 @@ export const createPatientSchema = z.object({
   casEminent: nullableString,
   casCodEminent: nullableString,
   casCategorieAsigurat: nullableString,
+  contactRefuzat: z.boolean().default(false),
   isVerified: z.never().optional(),
 })
 
