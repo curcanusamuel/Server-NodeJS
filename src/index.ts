@@ -18,6 +18,7 @@ import { serviciiRouter } from './routes/servicii/servicii.routes'
 import { discounturiRouter } from './routes/discounturi/discounturi.routes'
 import { subcategorieRouter } from './routes/subcategorie/subcategorie.routes'
 import { limiter } from './middleware/rateLimiter'
+import { requireAuth } from './middleware/auth'
 
 dotenv.config()
 
@@ -73,16 +74,16 @@ initDb()
 
     // ── Routes ──────────────────────────────────────────────
     app.use('/auth', limiter.auth, authRoutes)
-    app.use('/api/admin', limiter.admin, adminSettingsRoutes)
-    app.use('/api/admin/accounts', limiter.admin, adminAccountRoutes)
-    app.use('/api/client', limiter.client, clientSettingsRoutes)
-    app.use('/api/patients', limiter.patients, patientRouter)
-    app.use('/api/media', limiter.media, mediaRouter)
-    app.use('/api/modules', limiter.modules, moduleRouter)
-    app.use('/api/doctors', limiter.doctors, doctorRouter)
-    app.use('/api/servicii', limiter.servicii, serviciiRouter)
-    app.use('/api/discounturi', limiter.discounturi, discounturiRouter)
-    app.use('/api/subcategorie', limiter.subcategorie, subcategorieRouter)
+    app.use('/api/admin', limiter.admin, requireAuth, adminSettingsRoutes)
+    app.use('/api/admin/accounts', limiter.admin, requireAuth, adminAccountRoutes)
+    app.use('/api/client', limiter.client, requireAuth, clientSettingsRoutes)
+    app.use('/api/patients', limiter.patients, requireAuth, patientRouter)
+    app.use('/api/media', limiter.media, requireAuth, mediaRouter)
+    app.use('/api/modules', limiter.modules, requireAuth, moduleRouter)
+    app.use('/api/doctors', limiter.doctors, requireAuth, doctorRouter)
+    app.use('/api/servicii', limiter.servicii, requireAuth, serviciiRouter)
+    app.use('/api/discounturi', limiter.discounturi, requireAuth, discounturiRouter)
+    app.use('/api/subcategorie', limiter.subcategorie, requireAuth, subcategorieRouter)
 
     // Health check
     app.get('/health', async (_req: Request, res: Response) => {
