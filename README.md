@@ -1,117 +1,191 @@
-# Patient Server
+# IDS-Clinic Server
 
-Express + TypeScript REST API for patient CRUD.
+Backend API for the IDS-Clinic healthcare management system. Handles patient records, doctor management, medical services, file uploads, pricing, and user account administration.
 
-## Setup
+**Stack:** Node.js · Express · TypeScript · PostgreSQL (AWS RDS) · AWS S3 · AWS Secrets Manager
+
+## Prerequisites
+
+- Node.js 18+
+- PostgreSQL 17 client (`psql`, `pg_dump`, `pg_restore`)
+- Docker (for local database)
+- AWS credentials configured (S3 + Secrets Manager)
+
+## Getting Started
 
 ```bash
 npm install
-cp .env.example .env # or create .env manually
+cp .env.example .env
 ```
 
-Add DB settings to `.env`.
-
-Preferred (Supabase URI):
+### Environment Variables
 
 ```env
-# Select connection by mode
-DB_CONNECTION_MODE=direct
+PORT=3000
+NODE_ENV=dev                  # "dev" = use .env for DB creds, skip Secrets Manager
 
-# IPv6 direct host
-DATABASE_URL_DIRECT=postgresql://postgres:<PASSWORD>@db.<project-ref>.supabase.co:5432/postgres
+# AWS
+AWS_REGION=eu-north-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+S3_BUCKET_NAME=
 
-# IPv4-friendly pooler
-DATABASE_URL_POOLER=postgresql://postgres.<project-ref>:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
-
-# Optional TLS verification (default false, works with Supabase cert chain in this setup)
-DB_SSL_REJECT_UNAUTHORIZED=false
+# CORS (frontend origin)
+CORS_ORIGIN=http://localhost:5173
 ```
 
-Notes:
-- Your machine (Linux): set `DB_CONNECTION_MODE=direct`.
-- macOS/Windows machines: set `DB_CONNECTION_MODE=pooler`.
-- If password has reserved URL characters (`#`, `@`, `/`, `?`), they must be URL-encoded in raw URIs.  
-  Example: `abc#123` becomes `abc%23123`.
-- Do not append `sslmode` in URL query params; TLS is controlled by `DB_SSL_REJECT_UNAUTHORIZED`.
-- Legacy `SUPABASE_URL` is still accepted.
-
-Fallback (legacy split vars, still supported):
-
+**Database — split vars:**
 ```env
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=ids_clinic
 DB_USER=postgres
 DB_PASSWORD=
+DB_SSL=false
 ```
 
-## Database
+> **Secrets Manager:** In production (`NODE_ENV != dev`), DB credentials are pulled from `dev/idsclinic/db` and the session secret from `dev/idsclinic/db/session`. In `dev` mode both fall back to `.env`.
 
-Create the DB and run the migration:
-
-```bash
-createdb ids_clinic
-psql -d ids_clinic -f src/db/migrations/001_create_patients.sql
-```
-
-## Run
+## Running the Server
 
 ```bash
-# development (hot reload)
+# Development — hot reload
 npm run dev
 
-# production
-npm run build
-npm start
+# Production
+npm run build && npm start
 ```
 
-## API Endpoints
+## Authentication
 
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET | /api/patients | List all patients |
-| GET | /api/patients?q=ion | Search by name / CNP / cod |
-| GET | /api/patients/:id | Get one patient |
-| POST | /api/patients | Create patient |
-| PATCH | /api/patients/:id | Partial update |
-| DELETE | /api/patients/:id | Delete patient |
-| GET | /health | DB health check |
+Session-based auth using `express-session` + PostgreSQL session store.
 
-## Example Requests
+- **Login:** `POST /auth/login` → sets a `connect.sid` HttpOnly cookie
+- **Logout:** `POST /auth/logout` → destroys the session
+- **Check session:** `GET /auth/me`
 
-**Create patient:**
-```bash
-curl -X POST http://localhost:3000/api/patients \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nume": "Popescu",
-    "prenume": "Ion",
-    "varsta": 45,
-    "sex": "Masculin",
-    "tipActului": "C.I",
-    "codCNP": "1780312270619",
-    "dataNasterii": "1978-03-12",
-    "dataPrezentare": "2024-01-15",
-    "varstaPrezentare": 45,
-    "pacientOncologic": false,
-    "autorFisa": "admin"
-  }'
-```
+Two roles exist: `ADMIN` and `DOCTOR`. All `/api/*` routes require an active session. Admin-only routes additionally check `role === "ADMIN"`.
 
-**Search:**
-```bash
-curl http://localhost:3000/api/patients?q=popescu
-```
+## API Reference
 
-**Partial update:**
-```bash
-curl -X PATCH http://localhost:3000/api/patients/<uuid> \
-  -H "Content-Type: application/json" \
-  -d '{ "varsta": 46, "observatii": "Control anual" }'
-```
+All write endpoints (`POST`, `PATCH`, `PUT`, `DELETE`) are rate-limited to **10 req/min**. Read endpoints allow **100 req/min**.
 
+### Patients
 
-**Server Deployment Pipeline**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/patients` | List patients — supports cursor pagination, sorting, and multiple filters |
+| `GET` | `/api/patients/count` | Filtered patient count |
+| `GET` | `/api/patients/count/approximate` | Fast approximate total (no filters) |
+| `GET` | `/api/patients/navigation/first` | First patient for cursor-based navigation |
+| `GET` | `/api/patients/navigation/:id` | Previous/next patient relative to given ID |
+| `GET` | `/api/patients/:id` | Get a single patient |
+| `POST` | `/api/patients` | Create patient (validates CNP uniqueness) |
+| `PATCH` | `/api/patients/:id` | Partial update (blocked if patient is verified) |
+| `PATCH` | `/api/patients/:id/verification` | Toggle verification status |
+| `DELETE` | `/api/patients/:id` | Delete patient |
+
+**Patient list query params:** `q`, `cnp`, `nid`, `localitate`, `email`, `medicCurant`, `medicFamilie`, `dateStart`, `dateEnd`, `createdFromAppointmentOnly`, `sortKey`, `sortDirection`, `limit`, `cursor*`
+
+### Doctors
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/doctors` | List all doctors |
+| `GET` | `/api/doctors/:id` | Get a doctor |
+| `GET` | `/api/doctors/by-user/:userId` | Get doctor linked to a user account |
+| `POST` | `/api/doctors` | Create doctor |
+| `PATCH` | `/api/doctors/:id` | Update doctor |
+| `DELETE` | `/api/doctors/:id` | Delete doctor |
+
+### Media (File Uploads)
+
+Files are uploaded directly from the client to S3 using presigned POST URLs. The server never proxies file data.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/media/patient/:patientId` | List all media for a patient (includes presigned download URLs) |
+| `POST` | `/api/media/presign` | Generate a presigned S3 upload URL (max 100MB, expires in 5 min) |
+| `POST` | `/api/media` | Register a media record in the DB after a successful S3 upload |
+| `PUT` | `/api/media/:id` | Update media metadata |
+| `DELETE` | `/api/media/:id` | Delete media record + S3 file |
+
+Supported types: images (jpeg, png, webp, gif), videos (mp4, mov, avi, webm), documents (pdf, docx)
+
+### Services (Servicii)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/servicii` | List services |
+| `GET` | `/api/servicii/:id` | Get a service |
+| `POST` | `/api/servicii` | Create service (unique `codProcedura` required) |
+| `PATCH` | `/api/servicii/:id` | Update service |
+| `DELETE` | `/api/servicii/:id` | Delete service |
+
+### Pricing & Discounts (Discounturi)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/discounturi` | List discounts |
+| `GET` | `/api/discounturi/active-price` | Get active price for a service on a date — params: `servicuId`, `date`, optional `doctorId` |
+| `GET` | `/api/discounturi/:id` | Get a discount |
+| `POST` | `/api/discounturi` | Create discount (validates no date-range overlap for same service) |
+| `PATCH` | `/api/discounturi/:id` | Update discount |
+| `DELETE` | `/api/discounturi/:id` | Delete discount |
+
+### Subcategories
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/subcategorie` | List subcategories |
+| `GET` | `/api/subcategorie/:id` | Get a subcategory |
+| `POST` | `/api/subcategorie` | Create subcategory |
+| `PATCH` | `/api/subcategorie/:id` | Update subcategory |
+| `DELETE` | `/api/subcategorie/:id` | Delete subcategory |
+
+### Modules
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/modules` | List modules |
+| `GET` | `/api/modules/:id` | Get a module |
+| `POST` | `/api/modules` | Create module |
+| `PATCH` | `/api/modules/:id` | Update module |
+| `DELETE` | `/api/modules/:id` | Delete module |
+
+### Admin (ADMIN role only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/admin/accounts/users/getAccounts` | List all users |
+| `GET` | `/api/admin/accounts/users/getIDbyName` | Look up user ID by username |
+| `GET` | `/api/admin/accounts/count` | Total user count |
+| `POST` | `/api/admin/accounts/users` | Create user account |
+| `PUT` | `/api/admin/accounts/users/:id` | Update user (username, role, is_active) |
+| `PUT` | `/api/admin/accounts/users/:id/password` | Reset a user's password |
+| `DELETE` | `/api/admin/accounts/users/:id` | Delete user |
+| `GET` | `/api/admin/settings` | Get system settings |
+| `POST` | `/api/admin/settings` | Update system settings |
+| `POST` | `/api/admin/change-password` | Admin changes own password |
+
+### Client / Doctor Settings
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/client/settings` | Get personal settings (dark mode, etc.) |
+| `POST` | `/api/client/settings` | Update personal settings |
+| `POST` | `/api/client/change-password` | Change own password (requires current password) |
+| `POST` | `/api/client/change-username` | Change own username |
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Database health check (no auth required) |
+
+---
+
+## Server Deployment Pipeline
 
 # Deployment steps (manual)
 

@@ -6,4 +6,6 @@ coverage/
 *.tsbuildinfo
 .idea/
 .vscode/
-.DS_Store           
+.DS_Store
+*.sql
+CLAUDE.md           

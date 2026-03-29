@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rQoMDgdiPOyrjDBvUNDCNQxNM1gl9e2wkvreyOp4g6WckhMPNkLpdYdcfCTrntd
+\restrict uA90KXFXfn0TJdY2xKqS92Kr6Lq26XJOU8svOyhmxnzO7aGR4KIOO98PeSSl1GB
 
 -- Dumped from database version 17.9 (Debian 17.9-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Ubuntu 18.3-1.pgdg24.04+1)
@@ -343,7 +343,7 @@ CREATE TABLE public.patients (
     cas_cod_eminent character varying(50),
     cas_categorie_asigurat text,
     is_verified boolean DEFAULT false NOT NULL,
-    nume_complet character varying(200) GENERATED ALWAYS AS ((((nume)::text || ' '::text) || (prenume)::text)) STORED,
+    nume_complet character varying(201) GENERATED ALWAYS AS ((((nume)::text || ' '::text) || (prenume)::text)) STORED,
     contact_refuzat boolean DEFAULT false NOT NULL,
     CONSTRAINT patients_varsta_check CHECK (((varsta >= 0) AND (varsta <= 150))),
     CONSTRAINT patients_varsta_prezentare_check CHECK ((varsta_prezentare >= 0))
@@ -888,4 +888,4 @@ ALTER TABLE ONLY public.servicii
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rQoMDgdiPOyrjDBvUNDCNQxNM1gl9e2wkvreyOp4g6WckhMPNkLpdYdcfCTrntd
+\unrestrict uA90KXFXfn0TJdY2xKqS92Kr6Lq26XJOU8svOyhmxnzO7aGR4KIOO98PeSSl1GB
