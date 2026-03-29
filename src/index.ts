@@ -25,14 +25,22 @@ dotenv.config()
 const PgSession = connectPgSimple(session)
 
 const app = express()
-//app.set('trust proxy', 1) // tells express to read the real IP from X-Forwarded-For header, only set in production
+const isProd = process.env.NODE_ENV === 'production'
+if (isProd) app.set('trust proxy', 1)
 const PORT = Number(process.env.PORT) || 3000
 const HOST = process.env.HOST || '0.0.0.0'
 
 // ── Middleware ──────────────────────────────────────────────
 app.use(helmet())
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : []
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // allow requests with no origin (e.g. curl, mobile apps)
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS: origin ${origin} not allowed`))
+  },
   credentials: true,
 }))
 app.use(express.json())
@@ -57,8 +65,8 @@ initDb()
         saveUninitialized: false,
         cookie: {
           httpOnly: true,
-          secure: false,
-          sameSite: 'lax',
+          secure: isProd,
+          sameSite: isProd ? 'none' : 'lax',
           maxAge: getSettings().sessionTimeoutMinutes * 60 * 1000,
         },
       })
