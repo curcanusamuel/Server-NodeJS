@@ -5,6 +5,7 @@ import { CreateServiciuInput, UpdateServiciuInput, ServiciuListQuery } from '../
 export type ServiciuUpdateResult =
   | { status: 'updated'; serviciu: Serviciu }
   | { status: 'not_found' }
+  | { status: 'conflict' }
 
 function rowToServiciu(row: Record<string, unknown>): Serviciu {
   return {
@@ -23,6 +24,8 @@ function rowToServiciu(row: Record<string, unknown>): Serviciu {
     createdTimestamp: row.created_timestamp as Date,
     modificationAccount: (row.modification_account as string | null) ?? null,
     modificationTimestamp: (row.modification_timestamp as Date | null) ?? null,
+    version: row.version as number,
+    deletedAt: (row.deleted_at as string | null) ?? null,
   }
 }
 
@@ -31,6 +34,8 @@ export const serviciiRepository = {
     const conditions: string[] = []
     const values: unknown[] = []
     let i = 1
+
+    conditions.push(`deleted_at IS NULL`)
 
     if (query.includeDisabled !== 'true') {
       conditions.push(`is_disabled = FALSE`)
@@ -64,7 +69,7 @@ export const serviciiRepository = {
 
   async findById(id: string): Promise<Serviciu | null> {
     const result = await db.query(
-      `SELECT * FROM servicii WHERE zk_preturi_id_p = $1`,
+      `SELECT * FROM servicii WHERE zk_preturi_id_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return result.rows[0] ? rowToServiciu(result.rows[0]) : null
@@ -72,7 +77,7 @@ export const serviciiRepository = {
 
   async findByCodProcedura(codProcedura: string): Promise<Serviciu | null> {
     const result = await db.query(
-      `SELECT * FROM servicii WHERE cod_procedura = $1 AND is_disabled = FALSE`,
+      `SELECT * FROM servicii WHERE cod_procedura = $1 AND is_disabled = FALSE AND deleted_at IS NULL`,
       [codProcedura]
     )
     return result.rows[0] ? rowToServiciu(result.rows[0]) : null
@@ -170,18 +175,31 @@ export const serviciiRepository = {
 
     fields.push(`modification_account = $${i++}`)
     fields.push(`modification_timestamp = NOW()`)
+    fields.push(`version = version + 1`)
     values.push(data.modificationAccount)
+
+    const clientVersion = (data as Record<string, unknown>).version
+    let versionCheck = ''
+    if (clientVersion !== undefined) {
+      values.push(clientVersion)
+      versionCheck = `AND version = $${i++}`
+    }
 
     values.push(id)
     const result = await db.query(
       `UPDATE servicii
        SET ${fields.join(', ')}
        WHERE zk_preturi_id_p = $${i}
+         AND deleted_at IS NULL
+         ${versionCheck}
        RETURNING *`,
       values
     )
 
-    if (!result.rows[0]) return { status: 'not_found' }
+    if (!result.rows[0]) {
+      if (clientVersion !== undefined) return { status: 'conflict' }
+      return { status: 'not_found' }
+    }
     return { status: 'updated', serviciu: rowToServiciu(result.rows[0]) }
   },
 
@@ -191,12 +209,12 @@ export const serviciiRepository = {
       await client.query('BEGIN')
 
       await client.query(
-        `DELETE FROM discounturi WHERE zk_pret_id_f = $1`,
+        `UPDATE discounturi SET deleted_at = NOW() WHERE zk_pret_id_f = $1 AND deleted_at IS NULL`,
         [id]
       )
 
       const result = await client.query(
-        `DELETE FROM servicii WHERE zk_preturi_id_p = $1`,
+        `UPDATE servicii SET deleted_at = NOW() WHERE zk_preturi_id_p = $1 AND deleted_at IS NULL`,
         [id]
       )
 

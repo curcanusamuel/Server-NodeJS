@@ -111,6 +111,10 @@ discounturiRouter.patch(
         res.status(404).json({ error: 'Discount not found' })
         return
       }
+      if (result.status === 'conflict') {
+        res.status(409).json({ error: 'Discountul a fost modificat de alt utilizator. Reîncarcă pagina și încearcă din nou.' })
+        return
+      }
       if (result.status === 'overlap') {
         res.status(409).json({
           error: 'Exista deja un discount activ pentru aceasta perioada',

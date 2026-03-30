@@ -9,6 +9,7 @@ export const updateModuleSchema = z.object({
   numeModul: z.string().min(1).max(100).optional(),
   isDisabled: z.boolean().optional(),
   modificationAccount: z.string().min(1).max(100),
+  version: z.number().int().positive().optional(),
 })
 
 export type CreateModuleInput = z.infer<typeof createModuleSchema>

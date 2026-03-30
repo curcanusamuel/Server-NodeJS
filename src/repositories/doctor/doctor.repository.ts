@@ -5,6 +5,7 @@ import { CreateDoctorInput, UpdateDoctorInput } from '../../schemas/doctor.schem
 export type DoctorUpdateResult =
   | { status: 'updated'; doctor: Doctor }
   | { status: 'not_found' }
+  | { status: 'conflict' }
   | { status: 'user_taken' }
 
 function rowToDoctor(row: Record<string, unknown>): Doctor {
@@ -17,20 +18,22 @@ function rowToDoctor(row: Record<string, unknown>): Doctor {
     createdTimestamp: row.created_timestamp as Date,
     modificationAccount: (row.modification_account as string | null) ?? null,
     modificationTimestamp: (row.modification_timestamp as Date | null) ?? null,
+    version: row.version as number,
+    deletedAt: (row.deleted_at as string | null) ?? null,
   }
 }
 
 export const doctorRepository = {
   async findAll(): Promise<Doctor[]> {
     const result = await db.query(
-      `SELECT * FROM doctor WHERE is_disabled = FALSE ORDER BY nume_doctor ASC`
+      `SELECT * FROM doctor WHERE is_disabled = FALSE AND deleted_at IS NULL ORDER BY nume_doctor ASC`
     )
     return result.rows.map(rowToDoctor)
   },
 
   async findById(id: string): Promise<Doctor | null> {
     const result = await db.query(
-      `SELECT * FROM doctor WHERE zk_doctor_id_p = $1`,
+      `SELECT * FROM doctor WHERE zk_doctor_id_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return result.rows[0] ? rowToDoctor(result.rows[0]) : null
@@ -38,7 +41,7 @@ export const doctorRepository = {
 
   async findByUserId(userId: string): Promise<Doctor | null> {
     const result = await db.query(
-      `SELECT * FROM doctor WHERE user_id = $1`,
+      `SELECT * FROM doctor WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId]
     )
     return result.rows[0] ? rowToDoctor(result.rows[0]) : null
@@ -89,24 +92,37 @@ export const doctorRepository = {
 
     fields.push(`modification_account = $${i++}`)
     fields.push(`modification_timestamp = NOW()`)
+    fields.push(`version = version + 1`)
     values.push(data.modificationAccount)
+
+    const clientVersion = (data as Record<string, unknown>).version
+    let versionCheck = ''
+    if (clientVersion !== undefined) {
+      values.push(clientVersion)
+      versionCheck = `AND version = $${i++}`
+    }
 
     values.push(id)
     const result = await db.query(
       `UPDATE doctor
        SET ${fields.join(', ')}
        WHERE zk_doctor_id_p = $${i}
+         AND deleted_at IS NULL
+         ${versionCheck}
        RETURNING *`,
       values
     )
 
-    if (!result.rows[0]) return { status: 'not_found' }
+    if (!result.rows[0]) {
+      if (clientVersion !== undefined) return { status: 'conflict' }
+      return { status: 'not_found' }
+    }
     return { status: 'updated', doctor: rowToDoctor(result.rows[0]) }
   },
 
   async delete(id: string): Promise<boolean> {
     const result = await db.query(
-      `DELETE FROM doctor WHERE zk_doctor_id_p = $1`,
+      `UPDATE doctor SET deleted_at = NOW() WHERE zk_doctor_id_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return (result.rowCount ?? 0) > 0

@@ -5,6 +5,7 @@ import { CreateDiscountInput, UpdateDiscountInput, DiscountListQuery } from '../
 export type DiscountUpdateResult =
   | { status: 'updated'; discount: Discount }
   | { status: 'not_found' }
+  | { status: 'conflict' }
   | { status: 'overlap'; conflictId: string }
 
 export type DiscountCreateResult =
@@ -26,6 +27,8 @@ function rowToDiscount(row: Record<string, unknown>): Discount {
     createdTimestamp: row.created_timestamp as Date,
     modificationAccount: (row.modification_account as string | null) ?? null,
     modificationTimestamp: (row.modification_timestamp as Date | null) ?? null,
+    version: row.version as number,
+    deletedAt: (row.deleted_at as string | null) ?? null,
   }
 }
 
@@ -43,6 +46,7 @@ async function checkOverlap(
      WHERE zk_pret_id_f  = $1
        AND type          = $2
        AND is_disabled   = FALSE
+       AND deleted_at    IS NULL
        AND ($3::uuid IS NULL OR zk_pret_variabil_id_p <> $3::uuid)
        AND (
              ($2 = 'doctor' AND zk_doctor_id_f = $4::uuid)
@@ -68,6 +72,8 @@ export const discounturiRepository = {
     const conditions: string[] = []
     const values: unknown[] = []
     let i = 1
+
+    conditions.push(`deleted_at IS NULL`)
 
     if (query.includeDisabled !== 'true') {
       conditions.push(`is_disabled = FALSE`)
@@ -105,7 +111,7 @@ export const discounturiRepository = {
 
   async findById(id: string): Promise<Discount | null> {
     const result = await db.query(
-      `SELECT * FROM discounturi WHERE zk_pret_variabil_id_p = $1`,
+      `SELECT * FROM discounturi WHERE zk_pret_variabil_id_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return result.rows[0] ? rowToDiscount(result.rows[0]) : null
@@ -117,6 +123,7 @@ export const discounturiRepository = {
        WHERE zk_pret_id_f = $1
          AND type         = 'promotie'
          AND is_disabled  = FALSE
+         AND deleted_at   IS NULL
          AND start_date  <= $2::date
          AND (end_date IS NULL OR end_date >= $2::date)
        ORDER BY start_date DESC
@@ -132,6 +139,7 @@ export const discounturiRepository = {
            AND zk_doctor_id_f = $2
            AND type           = 'doctor'
            AND is_disabled    = FALSE
+           AND deleted_at     IS NULL
            AND start_date    <= $3::date
            AND (end_date IS NULL OR end_date >= $3::date)
          ORDER BY start_date DESC
@@ -146,6 +154,7 @@ export const discounturiRepository = {
        WHERE zk_pret_id_f = $1
          AND type         = 'baza'
          AND is_disabled  = FALSE
+         AND deleted_at   IS NULL
          AND start_date  <= $2::date
          AND (end_date IS NULL OR end_date >= $2::date)
        ORDER BY start_date DESC
@@ -159,6 +168,7 @@ export const discounturiRepository = {
        WHERE zk_pret_id_f = $1
          AND type         = 'baza'
          AND is_disabled  = FALSE
+         AND deleted_at   IS NULL
        ORDER BY ABS(start_date - $2::date)
        LIMIT 1`,
       [servicuId, date]
@@ -251,24 +261,38 @@ export const discounturiRepository = {
 
     fields.push(`modification_account = $${i++}`)
     fields.push(`modification_timestamp = NOW()`)
+    fields.push(`version = version + 1`)
     values.push(data.modificationAccount)
+
+    const clientVersion = (data as Record<string, unknown>).version
+    let versionCheck = ''
+    if (clientVersion !== undefined) {
+      values.push(clientVersion)
+      versionCheck = `AND version = $${i++}`
+    }
 
     values.push(id)
     const result = await db.query(
       `UPDATE discounturi
        SET ${fields.join(', ')}
        WHERE zk_pret_variabil_id_p = $${i}
+         AND deleted_at IS NULL
+         ${versionCheck}
        RETURNING *`,
       values
     )
 
-    if (!result.rows[0]) return { status: 'not_found' }
+    if (!result.rows[0]) {
+      // Distinguish version conflict from not_found
+      if (clientVersion !== undefined) return { status: 'conflict' }
+      return { status: 'not_found' }
+    }
     return { status: 'updated', discount: rowToDiscount(result.rows[0]) }
   },
 
   async delete(id: string): Promise<boolean> {
     const result = await db.query(
-      `DELETE FROM discounturi WHERE zk_pret_variabil_id_p = $1`,
+      `UPDATE discounturi SET deleted_at = NOW() WHERE zk_pret_variabil_id_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return (result.rowCount ?? 0) > 0

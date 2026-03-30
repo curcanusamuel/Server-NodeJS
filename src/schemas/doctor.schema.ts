@@ -11,6 +11,7 @@ export const updateDoctorSchema = z.object({
   userId: z.string().uuid().nullable().optional(),
   isDisabled: z.boolean().optional(),
   modificationAccount: z.string().min(1).max(100),
+  version: z.number().int().positive().optional(),
 })
 
 export type CreateDoctorInput = z.infer<typeof createDoctorSchema>

@@ -83,6 +83,10 @@ serviciiRouter.patch(
         res.status(404).json({ error: 'Serviciu not found' })
         return
       }
+      if (result.status === 'conflict') {
+        res.status(409).json({ error: 'Serviciul a fost modificat de alt utilizator. Reîncarcă pagina și încearcă din nou.' })
+        return
+      }
       res.json(result.serviciu)
     } catch (err) {
       logRequestError(req, err)

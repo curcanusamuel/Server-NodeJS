@@ -5,6 +5,7 @@ import { CreateModuleInput, UpdateModuleInput } from '../../schemas/module.schem
 export type ModuleUpdateResult =
   | { status: 'updated'; module: Module }
   | { status: 'not_found' }
+  | { status: 'conflict' }
 
 function rowToModule(row: Record<string, unknown>): Module {
   return {
@@ -15,20 +16,22 @@ function rowToModule(row: Record<string, unknown>): Module {
     createdTimestamp: row.created_timestamp as Date,
     modificationAccount: (row.modification_account as string | null) ?? null,
     modificationTimestamp: (row.modification_timestamp as Date | null) ?? null,
+    version: row.version as number,
+    deletedAt: (row.deleted_at as string | null) ?? null,
   }
 }
 
 export const moduleRepository = {
   async findAll(): Promise<Module[]> {
     const result = await db.query(
-      `SELECT * FROM module WHERE is_disabled = FALSE ORDER BY nume_modul ASC`
+      `SELECT * FROM module WHERE is_disabled = FALSE AND deleted_at IS NULL ORDER BY nume_modul ASC`
     )
     return result.rows.map(rowToModule)
   },
 
   async findById(id: string): Promise<Module | null> {
     const result = await db.query(
-      `SELECT * FROM module WHERE zk_idmodule_p = $1`,
+      `SELECT * FROM module WHERE zk_idmodule_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return result.rows[0] ? rowToModule(result.rows[0]) : null
@@ -68,24 +71,37 @@ export const moduleRepository = {
 
     fields.push(`modification_account = $${i++}`)
     fields.push(`modification_timestamp = NOW()`)
+    fields.push(`version = version + 1`)
     values.push(data.modificationAccount)
+
+    const clientVersion = (data as Record<string, unknown>).version
+    let versionCheck = ''
+    if (clientVersion !== undefined) {
+      values.push(clientVersion)
+      versionCheck = `AND version = $${i++}`
+    }
 
     values.push(id)
     const result = await db.query(
       `UPDATE module
        SET ${fields.join(', ')}
        WHERE zk_idmodule_p = $${i}
+         AND deleted_at IS NULL
+         ${versionCheck}
        RETURNING *`,
       values
     )
 
-    if (!result.rows[0]) return { status: 'not_found' }
+    if (!result.rows[0]) {
+      if (clientVersion !== undefined) return { status: 'conflict' }
+      return { status: 'not_found' }
+    }
     return { status: 'updated', module: rowToModule(result.rows[0]) }
   },
 
   async delete(id: string): Promise<boolean> {
     const result = await db.query(
-      `DELETE FROM module WHERE zk_idmodule_p = $1`,
+      `UPDATE module SET deleted_at = NOW() WHERE zk_idmodule_p = $1 AND deleted_at IS NULL`,
       [id]
     )
     return (result.rowCount ?? 0) > 0

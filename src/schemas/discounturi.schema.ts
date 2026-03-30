@@ -34,6 +34,7 @@ export const updateDiscountSchema = z.object({
   type: discountTypeEnum.optional(),
   isDisabled: z.boolean().optional(),
   modificationAccount: z.string().min(1).max(100),
+  version: z.number().int().positive().optional(),
 }).refine(
   (data) => data.type === undefined || data.type === 'doctor' ? true : data.zkDoctorIdF == null || data.zkDoctorIdF === undefined,
   {

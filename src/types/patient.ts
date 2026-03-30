@@ -74,6 +74,8 @@ export interface Patient {
   casCategorieAsigurat: string | null
   contactRefuzat: boolean
   isVerified: boolean
+  version: number
+  deletedAt: string | null
 }
 
 export type CreatePatientDTO = Omit<Patient, 'id' | 'dataIntroducerii' | 'dataUltimeiModificari' | 'isVerified'>

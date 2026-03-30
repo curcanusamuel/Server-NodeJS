@@ -76,6 +76,10 @@ subcategorieRouter.patch(
         res.status(404).json({ error: 'Subcategorie not found' })
         return
       }
+      if (result.status === 'conflict') {
+        res.status(409).json({ error: 'Subcategoria a fost modificat de alt utilizator. Reîncarcă pagina și încearcă din nou.' })
+        return
+      }
       res.json(result.subcategorie)
     } catch (err) {
       logRequestError(req, err)

@@ -11,6 +11,7 @@ export const updateSubcategorieSchema = z.object({
   numeSubcategorie: z.string().min(1).max(200).optional(),
   isDisabled: z.boolean().optional(),
   modificationAccount: z.string().min(1).max(100),
+  version: z.number().int().positive().optional(),
 })
 
 export const subcategorieListQuerySchema = z.object({

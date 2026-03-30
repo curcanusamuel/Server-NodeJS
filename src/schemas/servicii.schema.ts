@@ -25,6 +25,7 @@ export const updateServiciuSchema = z.object({
   isCas: z.boolean().optional(),
   isDisabled: z.boolean().optional(),
   modificationAccount: z.string().min(1).max(100),
+  version: z.number().int().positive().optional(),
 })
 
 export const serviciuListQuerySchema = z.object({

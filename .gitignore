@@ -8,4 +8,5 @@ coverage/
 .vscode/
 .DS_Store
 *.sql
-CLAUDE.md           
+CLAUDE.md
+.github/workflows/deploy.yml           

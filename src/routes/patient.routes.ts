@@ -28,6 +28,12 @@ async function handleUpdatePatient(req: Request, res: Response): Promise<void> {
       res.status(403).json({ error: 'Pacientii validati nu pot fi modificati' })
       return
     }
+    if (result.status === 'conflict') {
+      res.status(409).json({
+        error: 'Fișa a fost modificată de alt utilizator. Reîncarcă pagina și încearcă din nou.'
+      })
+      return
+    }
     res.json(result.patient)
   } catch (err) {
     logRequestError(req, err)

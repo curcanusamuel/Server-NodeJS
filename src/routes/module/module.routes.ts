@@ -67,6 +67,10 @@ moduleRouter.patch(
         res.status(404).json({ error: 'Module not found' })
         return
       }
+      if (result.status === 'conflict') {
+        res.status(409).json({ error: 'Modulul a fost modificat de alt utilizator. Reîncarcă pagina și încearcă din nou.' })
+        return
+      }
       res.json(result.module)
     } catch (err) {
       logRequestError(req, err)

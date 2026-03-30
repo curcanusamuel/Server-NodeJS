@@ -90,6 +90,10 @@ doctorRouter.patch(
         res.status(404).json({ error: 'Doctor not found' })
         return
       }
+      if (result.status === 'conflict') {
+        res.status(409).json({ error: 'Doctorul a fost modificat de alt utilizator. Reîncarcă pagina și încearcă din nou.' })
+        return
+      }
       if (result.status === 'user_taken') {
         res.status(409).json({ error: 'This user is already linked to another doctor' })
         return
