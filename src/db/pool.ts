@@ -55,6 +55,7 @@ export async function initDb(): Promise<void> {
     sessionSecret = process.env.SESSION_SECRET ?? 'dev-secret'
   }
 
+  const isDev = process.env.NODE_ENV === 'dev';
   const host = secretValues.host ?? process.env.DB_HOST ?? 'localhost';
   const explicitSsl = parseBooleanEnv(process.env.DB_SSL);
   const shouldUseSsl = explicitSsl ?? !isLocalHost(host);
@@ -70,8 +71,8 @@ export async function initDb(): Promise<void> {
 
     max: Number(process.env.DB_POOL_MAX) || 20,
     min: Number(process.env.DB_POOL_MIN) || 2,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 3_000,
+    idleTimeoutMillis: isDev ? 10_000 : 30_000,
+    connectionTimeoutMillis: isDev ? 10_000 : 3_000,
     statement_timeout: 15_000,
     query_timeout: 15_000,
   };
