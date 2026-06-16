@@ -17,6 +17,7 @@ import { doctorRouter } from './routes/doctor/doctor.routes'
 import { serviciiRouter } from './routes/servicii/servicii.routes'
 import { discounturiRouter } from './routes/discounturi/discounturi.routes'
 import { subcategorieRouter } from './routes/subcategorie/subcategorie.routes'
+import { medicalLetterRouter } from './routes/medicalLetter/medicalLetter.routes'
 import { limiter } from './middleware/rateLimiter'
 import { requireAuth } from './middleware/auth'
 
@@ -92,6 +93,7 @@ initDb()
     app.use('/api/servicii', limiter.servicii, requireAuth, serviciiRouter)
     app.use('/api/discounturi', limiter.discounturi, requireAuth, discounturiRouter)
     app.use('/api/subcategorie', limiter.subcategorie, requireAuth, subcategorieRouter)
+    app.use('/api/medical-letters', limiter.medicalLetters, requireAuth, medicalLetterRouter)
 
     // Health check
     app.get('/health', async (_req: Request, res: Response) => {

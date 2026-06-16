@@ -48,7 +48,8 @@ export const limiter = {
   modules:     makeResourceLimiter('modules'),
   doctors:     makeResourceLimiter('doctors'),
   servicii:    makeResourceLimiter('servicii'),
-  discounturi: makeResourceLimiter('discounturi'),
-  subcategorie: makeResourceLimiter('subcategorie'),
-  client:      makeResourceLimiter('client'),
+  discounturi:    makeResourceLimiter('discounturi'),
+  subcategorie:   makeResourceLimiter('subcategorie'),
+  client:         makeResourceLimiter('client'),
+  medicalLetters: makeResourceLimiter('medical-letters'),
 }
