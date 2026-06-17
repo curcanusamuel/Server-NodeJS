@@ -35,8 +35,8 @@ medicalLetterRouter.get('/', async (req: Request, res: Response): Promise<void> 
       })
       return
     }
-    const { items, nextCursor } = await medicalLetterRepository.findAll(queryResult.data)
-    res.json({ items, nextCursor })
+    const paginatedLetters = await medicalLetterRepository.findAll(queryResult.data)
+    res.json(paginatedLetters)
   } catch (err) {
     logRequestError(req, err)
     res.status(500).json({ error: 'Internal server error' })

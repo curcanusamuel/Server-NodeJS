@@ -12,6 +12,14 @@ export type MedicalLetterUpdateResult =
   | { status: 'not_found' }
   | { status: 'conflict' }
 
+export interface PaginatedMedicalLettersResult {
+  items: MedicalLetter[]
+  total: number | null
+  limit: number
+  hasMore: boolean
+  nextCursor: string | null
+}
+
 function toDateStr(val: unknown): string {
   if (val instanceof Date) return val.toISOString().split('T')[0]
   return String(val).slice(0, 10)
@@ -98,7 +106,7 @@ function rowToMedicalLetter(row: Record<string, unknown>): MedicalLetter {
 export const medicalLetterRepository = {
   async findAll(
     query: MedicalLetterListQuery = {}
-  ): Promise<{ items: MedicalLetter[]; nextCursor: string | null }> {
+  ): Promise<PaginatedMedicalLettersResult> {
     const conditions: string[] = ['deleted_at IS NULL']
     const values: unknown[] = []
     let i = 1
@@ -152,12 +160,12 @@ export const medicalLetterRepository = {
       values
     )
 
-    const hasNext = result.rows.length > limit
-    const rows = hasNext ? result.rows.slice(0, limit) : result.rows
+    const hasMore = result.rows.length > limit
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows
     const items = rows.map(rowToMedicalLetter)
 
     let nextCursor: string | null = null
-    if (hasNext && rows.length > 0) {
+    if (hasMore && rows.length > 0) {
       const last = rows[rows.length - 1]
       nextCursor = Buffer.from(
         JSON.stringify({
@@ -167,7 +175,13 @@ export const medicalLetterRepository = {
       ).toString('base64')
     }
 
-    return { items, nextCursor }
+    return {
+      items,
+      total: null,
+      limit,
+      hasMore,
+      nextCursor,
+    }
   },
 
   async findById(id: string): Promise<MedicalLetter | null> {
