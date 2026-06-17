@@ -43,6 +43,40 @@ medicalLetterRouter.get('/', async (req: Request, res: Response): Promise<void> 
   }
 })
 
+// GET /api/medical-letters/count/approximate
+medicalLetterRouter.get('/count/approximate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const total = await medicalLetterRepository.approximateCount()
+    res.json({ total })
+  } catch (err) {
+    logRequestError(req, err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/medical-letters/count
+medicalLetterRouter.get('/count', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const queryResult = medicalLetterListQuerySchema.safeParse(req.query)
+    if (!queryResult.success) {
+      res.status(400).json({
+        error: 'Invalid query parameters',
+        details: queryResult.error.errors.map(e => ({
+          field: e.path.join('.'),
+          message: e.message,
+        })),
+      })
+      return
+    }
+
+    const countResult = await medicalLetterRepository.count(queryResult.data)
+    res.json(countResult)
+  } catch (err) {
+    logRequestError(req, err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/medical-letters/:id
 medicalLetterRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {

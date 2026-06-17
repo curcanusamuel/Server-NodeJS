@@ -133,8 +133,15 @@ export const validateMedicalLetterSchema = z.object({
 })
 
 export const medicalLetterListQuerySchema = z.object({
+  q: z.string().optional(),
   patientId: z.string().uuid().optional(),
+  patientName: z.string().optional(),
+  patientNid: z.string().optional(),
+  nid: z.string().optional(),
   doctorId: z.string().uuid().optional(),
+  doctorName: z.string().optional(),
+  medicCurant: z.string().optional(),
+  currentDoctor: z.string().optional(),
   validated: z.enum(['true', 'false']).optional(),
   letterDateFrom: dateString.optional(),
   letterDateTo: dateString.optional(),

@@ -20,6 +20,10 @@ export interface PaginatedMedicalLettersResult {
   nextCursor: string | null
 }
 
+export interface MedicalLettersCountResult {
+  total: number
+}
+
 function toDateStr(val: unknown): string {
   if (val instanceof Date) return val.toISOString().split('T')[0]
   return String(val).slice(0, 10)
@@ -103,62 +107,107 @@ function rowToMedicalLetter(row: Record<string, unknown>): MedicalLetter {
   }
 }
 
+function addIlikeCondition(
+  conditions: string[],
+  values: unknown[],
+  column: string,
+  value: string | undefined,
+): void {
+  const trimmedValue = value?.trim()
+  if (!trimmedValue) return
+
+  conditions.push(`${column} ILIKE $${values.length + 1}`)
+  values.push(`%${trimmedValue}%`)
+}
+
+function buildMedicalLetterWhere(
+  query: MedicalLetterListQuery = {},
+  includeCursor: boolean,
+): { whereClause: string; values: unknown[] } {
+  const conditions: string[] = ['ml.deleted_at IS NULL']
+  const values: unknown[] = []
+
+  if (query.patientId) {
+    conditions.push(`ml.patient_id = $${values.length + 1}`)
+    values.push(query.patientId)
+  }
+
+  const patientQuery = query.patientName?.trim() || query.q?.trim()
+  if (patientQuery) {
+    conditions.push(`(ml.patient_name ILIKE $${values.length + 1} OR ml.patient_nid ILIKE $${values.length + 1})`)
+    values.push(`%${patientQuery}%`)
+  }
+
+  addIlikeCondition(conditions, values, 'ml.patient_nid', query.patientNid || query.nid)
+
+  if (query.doctorId) {
+    conditions.push(`ml.doctor_id = $${values.length + 1}`)
+    values.push(query.doctorId)
+  }
+
+  addIlikeCondition(conditions, values, 'ml.doctor_name', query.doctorName)
+
+  const currentDoctorQuery = query.currentDoctor?.trim() || query.medicCurant?.trim()
+  if (currentDoctorQuery) {
+    conditions.push(`EXISTS (
+      SELECT 1
+      FROM patients p
+      WHERE p.id = ml.patient_id
+        AND p.deleted_at IS NULL
+        AND p.medic_curant ILIKE $${values.length + 1}
+    )`)
+    values.push(`%${currentDoctorQuery}%`)
+  }
+
+  if (query.validated !== undefined) {
+    conditions.push(`ml.validated = $${values.length + 1}`)
+    values.push(query.validated === 'true')
+  }
+
+  if (query.letterDateFrom) {
+    conditions.push(`ml.letter_date >= $${values.length + 1}::date`)
+    values.push(query.letterDateFrom)
+  }
+
+  if (query.letterDateTo) {
+    conditions.push(`ml.letter_date <= $${values.length + 1}::date`)
+    values.push(query.letterDateTo)
+  }
+
+  if (includeCursor && query.cursor) {
+    try {
+      const decoded = JSON.parse(
+        Buffer.from(query.cursor, 'base64').toString('utf8')
+      ) as { letterDate: string; id: string }
+      conditions.push(`(ml.letter_date, ml.id) < ($${values.length + 1}::date, $${values.length + 2}::uuid)`)
+      values.push(decoded.letterDate, decoded.id)
+    } catch {
+      // ignore malformed cursor
+    }
+  }
+
+  return {
+    whereClause: `WHERE ${conditions.join(' AND ')}`,
+    values,
+  }
+}
+
 export const medicalLetterRepository = {
   async findAll(
     query: MedicalLetterListQuery = {}
   ): Promise<PaginatedMedicalLettersResult> {
-    const conditions: string[] = ['deleted_at IS NULL']
-    const values: unknown[] = []
-    let i = 1
-
-    if (query.patientId) {
-      conditions.push(`patient_id = $${i++}`)
-      values.push(query.patientId)
-    }
-
-    if (query.doctorId) {
-      conditions.push(`doctor_id = $${i++}`)
-      values.push(query.doctorId)
-    }
-
-    if (query.validated !== undefined) {
-      conditions.push(`validated = $${i++}`)
-      values.push(query.validated === 'true')
-    }
-
-    if (query.letterDateFrom) {
-      conditions.push(`letter_date >= $${i++}::date`)
-      values.push(query.letterDateFrom)
-    }
-
-    if (query.letterDateTo) {
-      conditions.push(`letter_date <= $${i++}::date`)
-      values.push(query.letterDateTo)
-    }
-
-    if (query.cursor) {
-      try {
-        const decoded = JSON.parse(
-          Buffer.from(query.cursor, 'base64').toString('utf8')
-        ) as { letterDate: string; id: string }
-        conditions.push(`(letter_date, id) < ($${i}::date, $${i + 1}::uuid)`)
-        values.push(decoded.letterDate, decoded.id)
-        i += 2
-      } catch {
-        // ignore malformed cursor
-      }
-    }
-
     const limit = Math.min(parseInt(query.limit ?? '20', 10) || 20, 100)
-    values.push(limit + 1)
+    const { whereClause, values } = buildMedicalLetterWhere(query, true)
+    const listValues = [...values, limit + 1]
 
     const result = await db.query(
-      `SELECT * FROM medical_letters
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY letter_date DESC, id DESC
-       LIMIT $${i}`,
-      values
+      `SELECT ml.* FROM medical_letters ml
+       ${whereClause}
+       ORDER BY ml.letter_date DESC, ml.id DESC
+       LIMIT $${listValues.length}`,
+      listValues
     )
+    const countResult = query.cursor ? null : await this.count(query)
 
     const hasMore = result.rows.length > limit
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows
@@ -177,11 +226,29 @@ export const medicalLetterRepository = {
 
     return {
       items,
-      total: null,
+      total: countResult?.total ?? null,
       limit,
       hasMore,
       nextCursor,
     }
+  },
+
+  async count(query: MedicalLetterListQuery = {}): Promise<MedicalLettersCountResult> {
+    const { whereClause, values } = buildMedicalLetterWhere(query, false)
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM medical_letters ml
+       ${whereClause}`,
+      values
+    )
+    return { total: Number(result.rows[0]?.total ?? 0) }
+  },
+
+  async approximateCount(): Promise<number> {
+    const result = await db.query(
+      `SELECT reltuples::bigint AS estimate FROM pg_class WHERE relname = 'medical_letters'`
+    )
+    return Number(result.rows[0]?.estimate ?? 0)
   },
 
   async findById(id: string): Promise<MedicalLetter | null> {
