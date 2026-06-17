@@ -1,6 +1,18 @@
 import { z } from 'zod'
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be a date in YYYY-MM-DD format')
+const medicalLetterSortKeySchema = z.enum([
+  'date',
+  'patient',
+  'nid',
+  'validationDoctor',
+  'currentDoctor',
+  'diagnosis',
+  'validationTime',
+  'sendStatus',
+  'updateStatus',
+  'isValid',
+])
 
 export const createMedicalLetterSchema = z.object({
   patientId: z.string().uuid(),
@@ -145,6 +157,8 @@ export const medicalLetterListQuerySchema = z.object({
   validated: z.enum(['true', 'false']).optional(),
   letterDateFrom: dateString.optional(),
   letterDateTo: dateString.optional(),
+  sortKey: medicalLetterSortKeySchema.optional(),
+  sortDirection: z.enum(['asc', 'desc']).optional(),
   cursor: z.string().optional(),
   limit: z.string().optional(),
   includeTotal: z.enum(['true', 'false']).optional(),

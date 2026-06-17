@@ -122,7 +122,6 @@ function addIlikeCondition(
 
 function buildMedicalLetterWhere(
   query: MedicalLetterListQuery = {},
-  includeCursor: boolean,
 ): { whereClause: string; values: unknown[] } {
   const conditions: string[] = ['ml.deleted_at IS NULL']
   const values: unknown[] = []
@@ -174,21 +173,92 @@ function buildMedicalLetterWhere(
     values.push(query.letterDateTo)
   }
 
-  if (includeCursor && query.cursor) {
-    try {
-      const decoded = JSON.parse(
-        Buffer.from(query.cursor, 'base64').toString('utf8')
-      ) as { letterDate: string; id: string }
-      conditions.push(`(ml.letter_date, ml.id) < ($${values.length + 1}::date, $${values.length + 2}::uuid)`)
-      values.push(decoded.letterDate, decoded.id)
-    } catch {
-      // ignore malformed cursor
-    }
-  }
-
   return {
     whereClause: `WHERE ${conditions.join(' AND ')}`,
     values,
+  }
+}
+
+function getSortExpression(sortKey: MedicalLetterListQuery['sortKey']): { expression: string; kind: 'date' | 'timestamp' | 'text' | 'boolean' } {
+  switch (sortKey) {
+    case 'patient':
+      return { expression: `LOWER(COALESCE(ml.patient_name, ''))`, kind: 'text' }
+    case 'nid':
+      return { expression: `LOWER(COALESCE(ml.patient_nid, ''))`, kind: 'text' }
+    case 'validationDoctor':
+      return { expression: `LOWER(COALESCE(ml.doctor_name, ''))`, kind: 'text' }
+    case 'currentDoctor':
+      return { expression: `LOWER(COALESCE(p.medic_curant, ml.doctor_name, ''))`, kind: 'text' }
+    case 'diagnosis':
+      return { expression: `LOWER(COALESCE(ml.diagnosis, ''))`, kind: 'text' }
+    case 'validationTime':
+    case 'updateStatus':
+      return { expression: 'ml.updated_at', kind: 'timestamp' }
+    case 'sendStatus':
+      return { expression: `(ml.document_url IS NOT NULL)::int`, kind: 'boolean' }
+    case 'isValid':
+      return { expression: 'ml.validated::int', kind: 'boolean' }
+    case 'date':
+    default:
+      return { expression: 'ml.letter_date', kind: 'date' }
+  }
+}
+
+function addCursorCondition(
+  whereClause: string,
+  values: unknown[],
+  query: MedicalLetterListQuery,
+  sort: { expression: string; kind: 'date' | 'timestamp' | 'text' | 'boolean' },
+  direction: 'ASC' | 'DESC',
+): string {
+  if (!query.cursor) return whereClause
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(query.cursor, 'base64').toString('utf8')
+    ) as { sortValue: string | number | boolean | null; id: string }
+    const op = direction === 'ASC' ? '>' : '<'
+    const sortParamIndex = values.length + 1
+    const idParamIndex = values.length + 2
+    const sortCast =
+      sort.kind === 'date' ? '::date' :
+      sort.kind === 'timestamp' ? '::timestamptz' :
+      sort.kind === 'boolean' ? '::int' :
+      ''
+    const decodedSortValue =
+      sort.kind === 'boolean'
+        ? (decoded.sortValue ? 1 : 0)
+        : decoded.sortValue ?? ''
+
+    values.push(decodedSortValue, decoded.id)
+    return `${whereClause} AND (${sort.expression}, ml.id) ${op} ($${sortParamIndex}${sortCast}, $${idParamIndex}::uuid)`
+  } catch {
+    return whereClause
+  }
+}
+
+function getRowSortValue(row: Record<string, unknown>, sortKey: MedicalLetterListQuery['sortKey']): string | number | boolean {
+  switch (sortKey) {
+    case 'patient':
+      return String(row.patient_name ?? '').toLowerCase()
+    case 'nid':
+      return String(row.patient_nid ?? '').toLowerCase()
+    case 'validationDoctor':
+      return String(row.doctor_name ?? '').toLowerCase()
+    case 'currentDoctor':
+      return String(row.current_doctor ?? row.doctor_name ?? '').toLowerCase()
+    case 'diagnosis':
+      return String(row.diagnosis ?? '').toLowerCase()
+    case 'validationTime':
+    case 'updateStatus':
+      return row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at ?? '')
+    case 'sendStatus':
+      return row.document_url !== null && row.document_url !== undefined
+    case 'isValid':
+      return Boolean(row.validated)
+    case 'date':
+    default:
+      return toDateStr(row.letter_date)
   }
 }
 
@@ -197,13 +267,17 @@ export const medicalLetterRepository = {
     query: MedicalLetterListQuery = {}
   ): Promise<PaginatedMedicalLettersResult> {
     const limit = Math.min(parseInt(query.limit ?? '20', 10) || 20, 100)
-    const { whereClause, values } = buildMedicalLetterWhere(query, true)
+    const { whereClause, values } = buildMedicalLetterWhere(query)
+    const sort = getSortExpression(query.sortKey)
+    const direction = query.sortDirection === 'asc' ? 'ASC' : 'DESC'
+    const whereWithCursor = addCursorCondition(whereClause, values, query, sort, direction)
     const listValues = [...values, limit + 1]
 
     const result = await db.query(
-      `SELECT ml.* FROM medical_letters ml
-       ${whereClause}
-       ORDER BY ml.letter_date DESC, ml.id DESC
+      `SELECT ml.*, p.medic_curant AS current_doctor FROM medical_letters ml
+       LEFT JOIN patients p ON p.id = ml.patient_id AND p.deleted_at IS NULL
+       ${whereWithCursor}
+       ORDER BY ${sort.expression} ${direction}, ml.id ${direction}
        LIMIT $${listValues.length}`,
       listValues
     )
@@ -219,7 +293,9 @@ export const medicalLetterRepository = {
       const last = rows[rows.length - 1]
       nextCursor = Buffer.from(
         JSON.stringify({
-          letterDate: toDateStr(last.letter_date),
+          sortKey: query.sortKey ?? 'date',
+          sortDirection: query.sortDirection ?? 'desc',
+          sortValue: getRowSortValue(last, query.sortKey),
           id: last.id as string,
         })
       ).toString('base64')
@@ -235,10 +311,11 @@ export const medicalLetterRepository = {
   },
 
   async count(query: MedicalLetterListQuery = {}): Promise<MedicalLettersCountResult> {
-    const { whereClause, values } = buildMedicalLetterWhere(query, false)
+    const { whereClause, values } = buildMedicalLetterWhere(query)
     const result = await db.query(
       `SELECT COUNT(*)::int AS total
        FROM medical_letters ml
+       LEFT JOIN patients p ON p.id = ml.patient_id AND p.deleted_at IS NULL
        ${whereClause}`,
       values
     )
