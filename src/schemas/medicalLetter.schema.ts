@@ -147,6 +147,7 @@ export const medicalLetterListQuerySchema = z.object({
   letterDateTo: dateString.optional(),
   cursor: z.string().optional(),
   limit: z.string().optional(),
+  includeTotal: z.enum(['true', 'false']).optional(),
 })
 
 export type CreateMedicalLetterInput = z.infer<typeof createMedicalLetterSchema>

@@ -207,7 +207,8 @@ export const medicalLetterRepository = {
        LIMIT $${listValues.length}`,
       listValues
     )
-    const countResult = query.cursor ? null : await this.count(query)
+    const shouldIncludeTotal = query.includeTotal !== 'false' && !query.cursor
+    const countResult = shouldIncludeTotal ? await this.count(query) : null
 
     const hasMore = result.rows.length > limit
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows
