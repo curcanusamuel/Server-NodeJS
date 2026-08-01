@@ -52,4 +52,12 @@ export const limiter = {
   subcategorie:   makeResourceLimiter('subcategorie'),
   client:         makeResourceLimiter('client'),
   medicalLetters: makeResourceLimiter('medical-letters'),
+  operations:     makeResourceLimiter('operations'),
+  appointments:   makeResourceLimiter('appointments'),
+  estimates:      makeResourceLimiter('estimates'),
+  payments:       makeResourceLimiter('payments'),
+  antecedente:    makeResourceLimiter('antecedente'),
+  evolution:      makeResourceLimiter('evolution'),
+  geneticCounseling: makeResourceLimiter('genetic-counseling'),
+  wards:          makeResourceLimiter('wards'),
 }

@@ -18,6 +18,14 @@ import { serviciiRouter } from './routes/servicii/servicii.routes'
 import { discounturiRouter } from './routes/discounturi/discounturi.routes'
 import { subcategorieRouter } from './routes/subcategorie/subcategorie.routes'
 import { medicalLetterRouter } from './routes/medicalLetter/medicalLetter.routes'
+import { operationRouter } from './routes/operation/operation.routes'
+import { appointmentRouter } from './routes/appointment/appointment.routes'
+import { estimateRouter } from './routes/estimate/estimate.routes'
+import { paymentRouter } from './routes/payment/payment.routes'
+import { antecedenteRouter } from './routes/antecedente/antecedente.routes'
+import { evolutionRouter } from './routes/evolution/evolution.routes'
+import { geneticCounselingRouter } from './routes/geneticCounseling/geneticCounseling.routes'
+import { wardRouter } from './routes/ward/ward.routes'
 import { limiter } from './middleware/rateLimiter'
 import { requireAuth } from './middleware/auth'
 
@@ -94,6 +102,14 @@ initDb()
     app.use('/api/discounturi', limiter.discounturi, requireAuth, discounturiRouter)
     app.use('/api/subcategorie', limiter.subcategorie, requireAuth, subcategorieRouter)
     app.use('/api/medical-letters', limiter.medicalLetters, requireAuth, medicalLetterRouter)
+    app.use('/api/operations', limiter.operations, requireAuth, operationRouter)
+    app.use('/api/appointments', limiter.appointments, requireAuth, appointmentRouter)
+    app.use('/api/estimates', limiter.estimates, requireAuth, estimateRouter)
+    app.use('/api/payments', limiter.payments, requireAuth, paymentRouter)
+    app.use('/api/antecedente', limiter.antecedente, requireAuth, antecedenteRouter)
+    app.use('/api/evolution', limiter.evolution, requireAuth, evolutionRouter)
+    app.use('/api/genetic-counseling', limiter.geneticCounseling, requireAuth, geneticCounselingRouter)
+    app.use('/api/wards', limiter.wards, requireAuth, wardRouter)
 
     // Health check
     app.get('/health', async (_req: Request, res: Response) => {

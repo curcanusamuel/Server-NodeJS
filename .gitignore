@@ -9,4 +9,10 @@ coverage/
 .DS_Store
 *.sql
 CLAUDE.md
-.github/workflows/deploy.yml           
+.github/workflows/deploy.yml
+
+# scratch/working notes, not meant to be committed
+claudeSecurityAudit.txt
+schemasToImplement.txt
+src/db/migrations/migration_command.txt
+           
