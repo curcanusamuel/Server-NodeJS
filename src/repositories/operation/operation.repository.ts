@@ -21,6 +21,7 @@ export type SortCursor =
 export interface OperationListParams {
 	q?: string
 	doctorId?: string
+	doctorName?: string
 	paid?: boolean
 	dateStart?: string
 	dateEnd?: string
@@ -46,6 +47,9 @@ const LIST_SELECT_COLUMNS = `
   patient_id,
   patient_name,
   patient_nid,
+  (SELECT p.cod_cnp FROM patients p WHERE p.id = operations.patient_id) AS patient_cnp,
+  (SELECT p.data_nasterii FROM patients p WHERE p.id = operations.patient_id) AS patient_birth_date,
+  (SELECT p.medic_familie_nume FROM patients p WHERE p.id = operations.patient_id) AS patient_family_doctor,
   doctor_id,
   doctor_name,
   company_id,
@@ -94,6 +98,7 @@ function buildOperationListWhere(params: OperationListParams, startIndex = 1): {
 	}
 
 	if (params.doctorId) pushCondition('doctor_id = __PARAM__::uuid', params.doctorId)
+	if (params.doctorName) pushCondition('doctor_name ILIKE __PARAM__', `%${params.doctorName}%`)
 	if (params.paid !== undefined) pushCondition('paid = __PARAM__', params.paid)
 	if (params.dateStart) pushCondition('operation_date >= __PARAM__::date', params.dateStart)
 	if (params.dateEnd) pushCondition('operation_date <= __PARAM__::date', params.dateEnd)
@@ -138,6 +143,9 @@ function rowToOperation(row: Record<string, unknown>): Operation {
 		patientId: row.patient_id as string,
 		patientName: row.patient_name as string,
 		patientNid: row.patient_nid as string,
+		patientCnp: (row.patient_cnp as string | null) ?? '',
+		patientBirthDate: (row.patient_birth_date as Date | null) ?? null,
+		patientFamilyDoctor: (row.patient_family_doctor as string | null) ?? '',
 		doctorId: row.doctor_id as string,
 		doctorName: row.doctor_name as string,
 		companyId: (row.company_id as string | null) ?? null,

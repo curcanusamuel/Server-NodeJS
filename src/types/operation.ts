@@ -4,6 +4,9 @@ export interface Operation {
   patientId: string
   patientName: string
   patientNid: string
+  patientCnp: string
+  patientBirthDate: Date | null
+  patientFamilyDoctor: string
   doctorId: string
   doctorName: string
   companyId: string | null

@@ -72,6 +72,7 @@ export const updateAppointmentSchema = createAppointmentSchema.partial().extend(
 })
 
 export const appointmentListQuerySchema = z.object({
+	q: optionalQueryString,
 	patientNid: optionalQueryString,
 	patientName: optionalQueryString,
 	patientPhone: optionalQueryString,
@@ -85,6 +86,7 @@ export const appointmentListQuerySchema = z.object({
 	moduleId: optionalQueryString,
 	categoryId: optionalQueryString,
 	createdByUserId: optionalQueryString,
+	createdByUserName: optionalQueryString,
 	status: z.preprocess(
 		(value) => Array.isArray(value) ? value[0] : value,
 		statusEnum.optional()

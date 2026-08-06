@@ -6,6 +6,9 @@ export interface Appointment {
   patientName: string
   patientNid: string
   patientPhone: string
+  patientCnp: string
+  patientBirthDate: Date | null
+  patientFamilyDoctor: string
   doctorId: string
   doctorName: string
   moduleId: string

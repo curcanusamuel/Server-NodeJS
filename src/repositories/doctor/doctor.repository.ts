@@ -23,10 +23,59 @@ function rowToDoctor(row: Record<string, unknown>): Doctor {
   }
 }
 
+type DoctorAccountSeed = {
+  userId: string
+  username: string
+}
+
+async function findDoctorAccountSeeds(): Promise<DoctorAccountSeed[]> {
+  const result = await db.query(
+    `SELECT u.id AS user_id, u.username
+     FROM app_user u
+     LEFT JOIN doctor d
+       ON d.user_id = u.id
+      AND d.deleted_at IS NULL
+     WHERE u.role = 'DOCTOR'
+       AND u.is_active = TRUE
+       AND d.zk_doctor_id_p IS NULL
+     ORDER BY u.username ASC`
+  )
+
+  return result.rows.map((row) => ({
+    userId: row.user_id as string,
+    username: row.username as string,
+  }))
+}
+
+async function ensureDoctorRowsForAccounts(): Promise<void> {
+  const missingDoctors = await findDoctorAccountSeeds()
+  if (missingDoctors.length === 0) return
+
+  for (const account of missingDoctors) {
+    await db.query(
+      `INSERT INTO doctor (
+        user_id,
+        nume_doctor,
+        created_account
+      ) VALUES ($1, $2, $3)`,
+      [account.userId, account.username, 'system-sync']
+    )
+  }
+}
+
 export const doctorRepository = {
   async findAll(): Promise<Doctor[]> {
+    await ensureDoctorRowsForAccounts()
     const result = await db.query(
-      `SELECT * FROM doctor WHERE is_disabled = FALSE AND deleted_at IS NULL ORDER BY nume_doctor ASC`
+      `SELECT d.*
+       FROM doctor d
+       JOIN app_user u
+         ON u.id = d.user_id
+       WHERE d.is_disabled = FALSE
+         AND d.deleted_at IS NULL
+         AND u.role = 'DOCTOR'
+         AND u.is_active = TRUE
+       ORDER BY d.nume_doctor ASC`
     )
     return result.rows.map(rowToDoctor)
   },
@@ -40,11 +89,38 @@ export const doctorRepository = {
   },
 
   async findByUserId(userId: string): Promise<Doctor | null> {
-    const result = await db.query(
+    let result = await db.query(
       `SELECT * FROM doctor WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId]
     )
-    return result.rows[0] ? rowToDoctor(result.rows[0]) : null
+
+    if (result.rows[0]) {
+      return rowToDoctor(result.rows[0])
+    }
+
+    const accountResult = await db.query(
+      `SELECT id, username
+       FROM app_user
+       WHERE id = $1
+         AND role = 'DOCTOR'
+         AND is_active = TRUE`,
+      [userId]
+    )
+
+    const account = accountResult.rows[0]
+    if (!account) return null
+
+    result = await db.query(
+      `INSERT INTO doctor (
+        user_id,
+        nume_doctor,
+        created_account
+      ) VALUES ($1, $2, $3)
+      RETURNING *`,
+      [account.id, account.username, 'system-sync']
+    )
+
+    return rowToDoctor(result.rows[0])
   },
 
   async create(data: CreateDoctorInput): Promise<Doctor> {

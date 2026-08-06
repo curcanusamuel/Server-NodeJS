@@ -71,6 +71,7 @@ export const updateOperationSchema = createOperationSchema.partial().extend({
 export const operationListQuerySchema = z.object({
 	q: optionalQueryString,
 	doctorId: optionalQueryString,
+	doctorName: optionalQueryString,
 	paid: optionalQueryBoolean,
 	dateStart: optionalQueryDateString,
 	dateEnd: optionalQueryDateString,

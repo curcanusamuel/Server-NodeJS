@@ -17,6 +17,7 @@ export type SortCursor =
 	| { sortKey: 'status'; status: string; appointmentDate: string; id: string }
 
 export interface AppointmentListParams {
+	q?: string
 	patientNid?: string
 	patientName?: string
 	patientPhone?: string
@@ -31,6 +32,7 @@ export interface AppointmentListParams {
 	moduleId?: string
 	categoryId?: string
 	createdByUserId?: string
+	createdByUserName?: string
 	status?: 'confirmed' | 'unconfirmed' | 'no_answer' | 'canceled'
 	showCanceled?: boolean
 	sortKey?: 'date' | 'time' | 'patientNid' | 'patientName' | 'doctor' | 'intervention' | 'status'
@@ -55,6 +57,9 @@ const LIST_SELECT_COLUMNS = `
   a.patient_name,
   a.patient_nid,
   a.patient_phone,
+  p.cod_cnp AS patient_cnp,
+  p.data_nasterii AS patient_birth_date,
+  p.medic_familie_nume AS patient_family_doctor,
   a.doctor_id,
   a.doctor_name,
   a.module_id,
@@ -83,10 +88,6 @@ function toContainsPattern(value?: string): string | null {
 	return trimmed ? `%${trimmed}%` : null
 }
 
-function needsPatientJoin(params: AppointmentListParams): boolean {
-	return Boolean(params.patientCnp || params.familyDoctor || params.birthDateStart || params.birthDateEnd)
-}
-
 function buildAppointmentListWhere(params: AppointmentListParams, startIndex = 1): { whereClause: string; values: unknown[] } {
 	const conditions: string[] = []
 	const values: unknown[] = []
@@ -96,6 +97,16 @@ function buildAppointmentListWhere(params: AppointmentListParams, startIndex = 1
 		conditions.push(sql.split('__PARAM__').join(`$${parameterIndex}`))
 		values.push(value)
 		parameterIndex += 1
+	}
+
+	const searchPattern = toContainsPattern(params.q)
+	if (searchPattern) {
+		const p = `$${parameterIndex}`
+		values.push(searchPattern)
+		parameterIndex += 1
+		conditions.push(
+			`(a.patient_name ILIKE ${p} OR a.patient_nid ILIKE ${p} OR a.patient_phone ILIKE ${p} OR COALESCE(p.cod_cnp, '') ILIKE ${p} OR a.doctor_name ILIKE ${p} OR a.service_name ILIKE ${p} OR COALESCE(a.notes, '') ILIKE ${p} OR a.created_by_user_name ILIKE ${p})`
+		)
 	}
 
 	const patientNidPattern = toContainsPattern(params.patientNid)
@@ -120,6 +131,7 @@ function buildAppointmentListWhere(params: AppointmentListParams, startIndex = 1
 	if (params.moduleId) pushCondition('a.module_id = __PARAM__::uuid', params.moduleId)
 	if (params.categoryId) pushCondition('a.category_id = __PARAM__::uuid', params.categoryId)
 	if (params.createdByUserId) pushCondition('a.created_by_user_id = __PARAM__::uuid', params.createdByUserId)
+	if (params.createdByUserName) pushCondition('a.created_by_user_name ILIKE __PARAM__', `%${params.createdByUserName}%`)
 
 	if (params.status) {
 		pushCondition('a.status = __PARAM__::appointment_status_enum', params.status)
@@ -166,6 +178,9 @@ function rowToAppointment(row: Record<string, unknown>): Appointment {
 		patientName: row.patient_name as string,
 		patientNid: row.patient_nid as string,
 		patientPhone: row.patient_phone as string,
+		patientCnp: (row.patient_cnp as string | null) ?? '',
+		patientBirthDate: (row.patient_birth_date as Date | null) ?? null,
+		patientFamilyDoctor: (row.patient_family_doctor as string | null) ?? '',
 		doctorId: row.doctor_id as string,
 		doctorName: row.doctor_name as string,
 		moduleId: row.module_id as string,
@@ -198,7 +213,7 @@ export const appointmentRepository = {
 		const orderBy = buildOrderBy(sortKey, params.sortDirection)
 		const limit = Math.min(Math.max(params.limit ?? 50, 1), 100)
 		const allValues = [...values]
-		const joinClause = needsPatientJoin(params) ? 'JOIN patients p ON p.id = a.patient_id' : ''
+		const joinClause = 'LEFT JOIN patients p ON p.id = a.patient_id'
 		let cursorClause = ''
 
 		if (params.cursor) {
@@ -321,7 +336,7 @@ export const appointmentRepository = {
 
 	async count(params: AppointmentListParams = {}): Promise<{ total: number }> {
 		const { whereClause, values } = buildAppointmentListWhere(params)
-		const joinClause = needsPatientJoin(params) ? 'JOIN patients p ON p.id = a.patient_id' : ''
+		const joinClause = 'LEFT JOIN patients p ON p.id = a.patient_id'
 		const filter = whereClause ? `${whereClause} AND a.deleted_at IS NULL` : 'WHERE a.deleted_at IS NULL'
 		const result = await db.query(
 			`SELECT COUNT(*)::int AS total FROM appointments a ${joinClause} ${filter}`,
@@ -339,7 +354,7 @@ export const appointmentRepository = {
 
 	async findById(id: string): Promise<Appointment | null> {
 		const result = await db.query(
-			`SELECT ${LIST_SELECT_COLUMNS} FROM appointments a WHERE a.id = $1 AND a.deleted_at IS NULL`,
+			`SELECT ${LIST_SELECT_COLUMNS} FROM appointments a LEFT JOIN patients p ON p.id = a.patient_id WHERE a.id = $1 AND a.deleted_at IS NULL`,
 			[id]
 		)
 		return result.rows[0] ? rowToAppointment(result.rows[0]) : null
