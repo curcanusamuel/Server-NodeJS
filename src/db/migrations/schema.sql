@@ -284,7 +284,8 @@ CREATE TYPE public.media_type_enum AS ENUM (
 
 CREATE TYPE public.user_role AS ENUM (
     'ADMIN',
-    'DOCTOR'
+    'DOCTOR',
+    'ADMINISTRARE'
 );
 
 
@@ -5894,4 +5895,3 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 --
 
 \unrestrict JRVSwxf5lwWbqm4VqOl4ICgysDpADxbv3QiWK3PXmYpM6rgextzJZRd5PVhX5H7
-

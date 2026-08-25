@@ -86,6 +86,22 @@ export async function initDb(): Promise<void> {
   db.on('error', (err) => {
     console.error('Unexpected DB pool client error', err);
   });
+
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'user_role'
+          AND e.enumlabel = 'ADMINISTRARE'
+      ) THEN
+        ALTER TYPE public.user_role ADD VALUE 'ADMINISTRARE';
+      END IF;
+    END
+    $$;
+  `)
 }
 
 export { db, sessionSecret }

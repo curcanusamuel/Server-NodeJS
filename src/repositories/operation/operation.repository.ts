@@ -40,6 +40,15 @@ export interface PaginatedOperationsResult {
 	nextCursor: SortCursor | null
 }
 
+export interface OperationSummaryResult {
+	totalCount: number
+	totalAmount: number
+	paidCount: number
+	paidAmount: number
+	unpaidCount: number
+	unpaidAmount: number
+}
+
 const ORDER_BY = 'ORDER BY operation_date DESC, id DESC'
 const LIST_SELECT_COLUMNS = `
   id,
@@ -335,6 +344,34 @@ export const operationRepository = {
 		const filter = whereClause ? `${whereClause} AND deleted_at IS NULL` : 'WHERE deleted_at IS NULL'
 		const result = await db.query(`SELECT COUNT(*)::int AS total FROM operations ${filter}`, values)
 		return { total: Number(result.rows[0]?.total ?? 0) }
+	},
+
+	async summary(params: OperationListParams = {}): Promise<OperationSummaryResult> {
+		const { whereClause, values } = buildOperationListWhere(params)
+		const filter = whereClause ? `${whereClause} AND deleted_at IS NULL` : 'WHERE deleted_at IS NULL'
+		const result = await db.query(
+			`
+				SELECT
+					COUNT(*)::int AS total_count,
+					COALESCE(SUM(price), 0)::numeric AS total_amount,
+					COUNT(*) FILTER (WHERE paid = TRUE)::int AS paid_count,
+					COALESCE(SUM(price) FILTER (WHERE paid = TRUE), 0)::numeric AS paid_amount,
+					COUNT(*) FILTER (WHERE paid = FALSE)::int AS unpaid_count,
+					COALESCE(SUM(price) FILTER (WHERE paid = FALSE), 0)::numeric AS unpaid_amount
+				FROM operations
+				${filter}
+			`,
+			values,
+		)
+		const row = result.rows[0] ?? {}
+		return {
+			totalCount: Number(row.total_count ?? 0),
+			totalAmount: Number(row.total_amount ?? 0),
+			paidCount: Number(row.paid_count ?? 0),
+			paidAmount: Number(row.paid_amount ?? 0),
+			unpaidCount: Number(row.unpaid_count ?? 0),
+			unpaidAmount: Number(row.unpaid_amount ?? 0),
+		}
 	},
 
 	async approximateCount(): Promise<number> {

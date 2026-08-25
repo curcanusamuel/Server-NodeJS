@@ -110,6 +110,21 @@ operationRouter.get('/count', async (req: Request, res: Response): Promise<void>
 	}
 })
 
+operationRouter.get('/summary', async (req: Request, res: Response): Promise<void> => {
+	try {
+		const parsedQuery = operationListQuerySchema.safeParse(req.query)
+		if (!parsedQuery.success) {
+			res.status(400).json({ error: 'Invalid operation summary query parameters', details: parsedQuery.error.flatten() })
+			return
+		}
+		const summary = await operationRepository.summary(parsedQuery.data)
+		res.json(summary)
+	} catch (err) {
+		logRequestError(req, err)
+		res.status(500).json({ error: 'Internal server error' })
+	}
+})
+
 operationRouter.get('/count/approximate', async (_req: Request, res: Response): Promise<void> => {
 	try {
 		const total = await operationRepository.approximateCount()
