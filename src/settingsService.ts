@@ -3,7 +3,7 @@ import { db } from './db/pool'
 interface AppSettings {
   darkMode: boolean
   sessionTimeoutMinutes: number
-  defaultUserRole: 'ADMIN' | 'DOCTOR' | 'ADMINISTRARE'
+  defaultUserRole: 'ADMIN' | 'DOCTOR' | 'ADMINISTRARE' | 'RECEPTIE'
   allowAccountCreation: boolean
 }
 
@@ -29,7 +29,7 @@ export async function loadSettingsFromDb(): Promise<void> {
   settings = {
     darkMode: map.get('dark_mode_enabled') === 'true',
     sessionTimeoutMinutes: Number(map.get('session_timeout_minutes') || 120),
-    defaultUserRole: (map.get('default_user_role') || 'DOCTOR') as 'ADMIN' | 'DOCTOR' | 'ADMINISTRARE',
+    defaultUserRole: (map.get('default_user_role') || 'DOCTOR') as 'ADMIN' | 'DOCTOR' | 'ADMINISTRARE' | 'RECEPTIE',
     allowAccountCreation: map.get('allow_account_creation') === 'true',
   }
 }

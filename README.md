@@ -68,7 +68,7 @@ Two roles exist: `ADMIN` and `DOCTOR`. All `/api/*` routes require an active ses
 
 ## API Reference
 
-All write endpoints (`POST`, `PATCH`, `PUT`, `DELETE`) are rate-limited to **10 req/min**. Read endpoints allow **100 req/min**.
+All write endpoints (`POST`, `PATCH`, `PUT`, `DELETE`) are rate-limited to **10 req/min**. Read endpoints allow **400 req/min**.
 
 ### Patients
 

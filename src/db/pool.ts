@@ -99,6 +99,16 @@ export async function initDb(): Promise<void> {
       ) THEN
         ALTER TYPE public.user_role ADD VALUE 'ADMINISTRARE';
       END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'user_role'
+          AND e.enumlabel = 'RECEPTIE'
+      ) THEN
+        ALTER TYPE public.user_role ADD VALUE 'RECEPTIE';
+      END IF;
     END
     $$;
   `)

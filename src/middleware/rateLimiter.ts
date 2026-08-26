@@ -6,12 +6,12 @@ const WINDOW_10_MIN = 10 * 60 * 1000
 const WINDOW_1_HOUR = 60 * 60 * 1000
 const WINDOW_1_MIN  = 60 * 1000
 
-// Per-resource limiter: GET 100/min, write (POST/PUT/PATCH) 10/min, DELETE 10/min
+// Per-resource limiter: GET 400/min, write (POST/PUT/PATCH) 10/min, DELETE 10/min
 // Each resource gets its own MemoryStore instances so counters are fully isolated.
 function makeResourceLimiter(resource: string) {
   const getLimiter = rateLimit({
     windowMs: WINDOW_1_MIN,
-    max: 100,
+    max: 400,
     keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? '')}:${resource}:get`,
     standardHeaders: true,
     legacyHeaders: false,
