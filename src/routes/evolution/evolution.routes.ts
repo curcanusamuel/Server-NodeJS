@@ -16,6 +16,27 @@ function logRequestError(req: Request, err: unknown): void {
 	})
 }
 
+// GET /api/evolution - global evolution list
+evolutionRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+	try {
+		const records = await evolutionRepository.list({
+			patient: typeof req.query.patient === 'string' ? req.query.patient : undefined,
+			nid: typeof req.query.nid === 'string' ? req.query.nid : undefined,
+			doctor: typeof req.query.doctor === 'string' ? req.query.doctor : undefined,
+			currentDoctor: typeof req.query.currentDoctor === 'string' ? req.query.currentDoctor : undefined,
+			dateStart: typeof req.query.dateStart === 'string' ? req.query.dateStart : undefined,
+			dateEnd: typeof req.query.dateEnd === 'string' ? req.query.dateEnd : undefined,
+			validOnly: req.query.validOnly === 'true',
+			limit: req.query.limit ? Number(req.query.limit) : undefined,
+			offset: req.query.offset ? Number(req.query.offset) : undefined,
+		})
+		res.json(records)
+	} catch (err) {
+		logRequestError(req, err)
+		res.status(500).json({ error: 'Internal server error' })
+	}
+})
+
 // GET /api/evolution/patient/:patientId — patient chart timeline
 evolutionRouter.get('/patient/:patientId', async (req: Request, res: Response): Promise<void> => {
 	try {

@@ -96,6 +96,7 @@ const FIELD_MAP: Record<string, string> = {
 	documentUrl: 'document_url',
 	documentS3Key: 'document_s3_key',
 	mediaItemId: 'media_item_id',
+	createdByUserId: 'created_by_user_id',
 }
 
 function rowToAntecedente(row: Record<string, unknown>): Antecedente {

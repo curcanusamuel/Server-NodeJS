@@ -7,6 +7,7 @@ export interface Evolution {
   patientNid: string
   doctorId: string
   doctorName: string
+  currentDoctorName?: string | null
   evolutionDate: Date
   visitType: string | null
   consultType: string | null

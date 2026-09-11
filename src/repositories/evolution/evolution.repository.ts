@@ -7,6 +7,26 @@ export type EvolutionUpdateResult =
 	| { status: 'not_found' }
 	| { status: 'conflict' }
 
+export interface EvolutionListParams {
+	patient?: string
+	nid?: string
+	doctor?: string
+	currentDoctor?: string
+	dateStart?: string
+	dateEnd?: string
+	validOnly?: boolean
+	limit?: number
+	offset?: number
+}
+
+export interface EvolutionListResult {
+	items: Evolution[]
+	total: number
+	limit: number
+	offset: number
+	hasMore: boolean
+}
+
 const SELECT_COLUMNS = `
   id, patient_id, patient_name, patient_nid, doctor_id, doctor_name, evolution_date,
   visit_type, consult_type, rte, ecog, normal_field_values, objective_exam_text,
@@ -19,6 +39,11 @@ const SELECT_COLUMNS = `
   comments, is_validated, document_date, document_name, document_url, document_s3_key,
   media_item_id, created_by_user_id, created_at, updated_at, version, deleted_at
 `
+
+const LIST_SELECT_COLUMNS = SELECT_COLUMNS
+	.split(',')
+	.map((column) => `e.${column.trim()}`)
+	.join(', ')
 
 const FIELD_MAP: Record<string, string> = {
 	patientId: 'patient_id',
@@ -68,6 +93,7 @@ const FIELD_MAP: Record<string, string> = {
 	documentUrl: 'document_url',
 	documentS3Key: 'document_s3_key',
 	mediaItemId: 'media_item_id',
+	createdByUserId: 'created_by_user_id',
 }
 
 function rowToEvolution(row: Record<string, unknown>): Evolution {
@@ -78,6 +104,7 @@ function rowToEvolution(row: Record<string, unknown>): Evolution {
 		patientNid: row.patient_nid as string,
 		doctorId: row.doctor_id as string,
 		doctorName: row.doctor_name as string,
+		currentDoctorName: (row.current_doctor as string | null | undefined) ?? null,
 		evolutionDate: row.evolution_date as Date,
 		visitType: (row.visit_type as string | null) ?? null,
 		consultType: (row.consult_type as string | null) ?? null,
@@ -129,6 +156,77 @@ function rowToEvolution(row: Record<string, unknown>): Evolution {
 }
 
 export const evolutionRepository = {
+	async list(params: EvolutionListParams = {}): Promise<EvolutionListResult> {
+		const conditions = ['e.deleted_at IS NULL']
+		const values: unknown[] = []
+		let index = 1
+
+		const pushCondition = (sql: string, value: unknown): void => {
+			conditions.push(sql.split('__PARAM__').join(`$${index}`))
+			values.push(value)
+			index += 1
+		}
+
+		const patient = params.patient?.trim()
+		if (patient) {
+			pushCondition(
+				`(e.patient_name ILIKE __PARAM__ OR e.patient_nid ILIKE __PARAM__)`,
+				`%${patient}%`
+			)
+		}
+
+		const nid = params.nid?.trim()
+		if (nid) pushCondition('e.patient_nid ILIKE __PARAM__', `%${nid}%`)
+
+		const doctor = params.doctor?.trim()
+		if (doctor) pushCondition('e.doctor_name = __PARAM__', doctor)
+
+		const currentDoctor = params.currentDoctor?.trim()
+		if (currentDoctor) {
+			pushCondition(`COALESCE(NULLIF(p.medic_curant, ''), e.doctor_name) = __PARAM__`, currentDoctor)
+		}
+
+		if (params.dateStart) pushCondition('e.evolution_date >= __PARAM__::date', params.dateStart)
+		if (params.dateEnd) pushCondition("e.evolution_date < (__PARAM__::date + INTERVAL '1 day')", params.dateEnd)
+		if (params.validOnly) conditions.push('e.is_validated = TRUE')
+
+		const limit = Math.min(Math.max(params.limit ?? 100, 1), 500)
+		const offset = Math.max(params.offset ?? 0, 0)
+		const whereClause = `WHERE ${conditions.join(' AND ')}`
+
+		const countResult = await db.query(
+			`SELECT COUNT(*)::int AS total
+       FROM evolution e
+       LEFT JOIN patients p
+         ON p.id = e.patient_id
+        AND p.deleted_at IS NULL
+       ${whereClause}`,
+			values
+		)
+
+		const dataResult = await db.query(
+			`SELECT ${LIST_SELECT_COLUMNS},
+              COALESCE(NULLIF(p.medic_curant, ''), e.doctor_name) AS current_doctor
+       FROM evolution e
+       LEFT JOIN patients p
+         ON p.id = e.patient_id
+        AND p.deleted_at IS NULL
+       ${whereClause}
+       ORDER BY e.evolution_date DESC, e.id DESC
+       LIMIT $${index} OFFSET $${index + 1}`,
+			[...values, limit, offset]
+		)
+
+		const total = Number(countResult.rows[0]?.total ?? 0)
+		return {
+			items: dataResult.rows.map(rowToEvolution),
+			total,
+			limit,
+			offset,
+			hasMore: offset + dataResult.rows.length < total,
+		}
+	},
+
 	async findById(id: string): Promise<Evolution | null> {
 		const result = await db.query(
 			`SELECT ${SELECT_COLUMNS} FROM evolution WHERE id = $1 AND deleted_at IS NULL`,
