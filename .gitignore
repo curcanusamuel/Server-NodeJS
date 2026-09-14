@@ -15,4 +15,8 @@ CLAUDE.md
 claudeSecurityAudit.txt
 schemasToImplement.txt
 src/db/migrations/migration_command.txt
+
+# Supabase CLI local cache (machine-specific, not secrets but not shared state)
+supabase/.temp
+supabase/.branches
            
