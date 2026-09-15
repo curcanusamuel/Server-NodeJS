@@ -58,6 +58,7 @@ export interface PatientsCountResult {
 }
 
 const ORDER_BY = 'ORDER BY data_introducerii ASC, id ASC'
+const REVERSE_ORDER_BY = 'ORDER BY data_introducerii DESC, id DESC'
 const LIST_SELECT_COLUMNS = `
   id,
   nume,
@@ -563,6 +564,41 @@ export const patientRepository = {
      FROM patients p
      ${filter}
      ${ORDER_BY}
+     LIMIT 1`,
+			values
+		)
+
+		if (!result.rows[0]) {
+			return {
+				patient: null,
+				previousId: null,
+				nextId: null,
+				totalCount: 0,
+			}
+		}
+
+		return rowToNavigation(result.rows[0])
+	},
+
+	async findLastNavigation(query?: string): Promise<PatientNavigationResult> {
+		const { whereClause, values } = buildSearchFilter(query)
+		// Mirror of findFirstNavigation: the last row always has next_id = NULL, so we
+		// only need the last row, the second-to-last row's id, and a plain count.
+		// Each can use the same index on (data_introducerii, id), scanned backwards.
+
+		const filter = whereClause
+			? `${whereClause} AND deleted_at IS NULL`
+			: 'WHERE deleted_at IS NULL'
+
+		const result = await db.query(
+			`SELECT
+       p.*,
+       (SELECT id FROM patients ${filter} ${REVERSE_ORDER_BY} OFFSET 1 LIMIT 1) AS previous_id,
+       NULL AS next_id,
+       (SELECT COUNT(*)::int FROM patients ${filter}) AS total_count
+     FROM patients p
+     ${filter}
+     ${REVERSE_ORDER_BY}
      LIMIT 1`,
 			values
 		)

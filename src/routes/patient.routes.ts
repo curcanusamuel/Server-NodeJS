@@ -192,6 +192,19 @@ patientRouter.get('/navigation/first', async (req: Request, res: Response): Prom
   }
 })
 
+// GET /api/patients/navigation/last?q=
+// Registered before '/navigation/:id' so 'last' is not treated as a patient id.
+patientRouter.get('/navigation/last', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const query = req.query.q as string | undefined
+    const navigation = await patientRepository.findLastNavigation(query)
+    res.json(navigation)
+  } catch (err) {
+    logRequestError(req, err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/patients/navigation/:id?q=
 patientRouter.get('/navigation/:id', async (req: Request, res: Response): Promise<void> => {
   try {
